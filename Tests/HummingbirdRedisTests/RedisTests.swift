@@ -21,7 +21,7 @@ final class HummingbirdRedisTests: XCTestCase {
             }
         }
         app.XCTStart()
-        defer { app.stop(); }
+        defer { app.XCTStop(); }
 
         app.XCTExecute(uri: "/redis", method: .GET) { response in
             var body = try XCTUnwrap(response.body)
