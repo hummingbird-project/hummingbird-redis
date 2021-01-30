@@ -9,34 +9,29 @@ extension HBApplication {
         init(configuration: RedisConfiguration, application: HBApplication) {
             self.configuration = configuration
             self.application = application
-            self.pools = Redis.createPools(configuration: configuration, application: application)
-            self.pubsubClient = self.pools.first!.value
+            Self.createPools(configuration: configuration, application: application)
+            self.pubsubClient = application.eventLoopStorage.first{ _ in true }!.storage.redisPool
 
             application.lifecycle.registerShutdown(label: "Redis", .eventLoopFuture(self.closePools))
         }
 
         public func pool(for eventLoop: EventLoop) -> RedisConnectionPool {
-            guard let pool = self.pools[eventLoop.key] else {
-                fatalError("EventLoop must be from Application's EventLoopGroup.")
-            }
-            return pool
+            return application.eventLoopStorage.get(for: eventLoop).redisPool
         }
 
-        private static func createPools(configuration: RedisConfiguration, application: HBApplication) -> [EventLoop.Key: RedisConnectionPool] {
-            var pools = [EventLoop.Key: RedisConnectionPool]()
-            for eventLoop in application.eventLoopGroup.makeIterator() {
-                pools[eventLoop.key] = RedisConnectionPool(
+        private static func createPools(configuration: RedisConfiguration, application: HBApplication) {
+            application.eventLoopStorage.forEach { eventLoop, storage in
+                storage.redisPool = RedisConnectionPool(
                     configuration: .init(configuration, defaultLogger: application.logger),
                     boundEventLoop: eventLoop
                 )
             }
-            return pools
         }
 
         private func closePools() -> EventLoopFuture<Void> {
-            let poolCloseFutures = pools.values.map { pool -> EventLoopFuture<Void> in
-                let promise = pool.eventLoop.makePromise(of: Void.self)
-                pool.close(promise: promise)
+            let poolCloseFutures: [EventLoopFuture<Void>] = application.eventLoopStorage.map { ev, storage in
+                let promise = ev.makePromise(of: Void.self)
+                storage.redisPool.close(promise: promise)
                 return promise.futureResult
             }
             return EventLoopFuture.andAllComplete(poolCloseFutures, on: self.application.eventLoopGroup.next())
@@ -46,7 +41,6 @@ extension HBApplication {
 
         private var application: HBApplication
         private var configuration: RedisConfiguration
-        private var pools: [EventLoop.Key: RedisConnectionPool]
     }
 
     public var redis: Redis {
@@ -60,10 +54,10 @@ extension HBApplication {
     }
 }
 
-private extension EventLoop {
-    typealias Key = ObjectIdentifier
-    var key: Key {
-        ObjectIdentifier(self)
+extension HBApplication.EventLoopStorage {
+    var redisPool: RedisConnectionPool {
+        get { extensions.get(\.redisPool) }
+        set { extensions.set(\.redisPool, value: newValue) }
     }
 }
 
