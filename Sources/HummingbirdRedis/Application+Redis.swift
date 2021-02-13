@@ -39,7 +39,7 @@ extension HBApplication {
 
         var pubsubClient: RedisClient
 
-        private var application: HBApplication
+        private unowned var application: HBApplication
         private var configuration: RedisConfiguration
     }
 
