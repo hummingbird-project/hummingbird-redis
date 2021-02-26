@@ -9,7 +9,7 @@ let package = Package(
         .library(name: "HummingbirdRedis", targets: ["HummingbirdRedis"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/adam-fowler/hummingbird.git", from: "0.5.0"),
+        .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "0.5.0"),
         .package(url: "https://gitlab.com/mordil/RediStack.git", from: "1.1.0"),
     ],
     targets: [
