@@ -1,6 +1,6 @@
 import Hummingbird
-import HummingbirdXCT
 @testable import HummingbirdRedis
+import HummingbirdXCT
 import XCTest
 
 final class HummingbirdRedisTests: XCTestCase {
@@ -16,12 +16,10 @@ final class HummingbirdRedisTests: XCTestCase {
         let app = HBApplication(testing: .live)
         try app.addRedis(configuration: .init(hostname: "localhost", port: 6379))
         app.router.get("redis") { req in
-            req.redis.send(command: "INFO").map {
-                $0.description
-            }
+            req.redis.send(command: "INFO").map(\.description)
         }
         app.XCTStart()
-        defer { app.XCTStop(); }
+        defer { app.XCTStop() }
 
         app.XCTExecute(uri: "/redis", method: .GET) { response in
             var body = try XCTUnwrap(response.body)

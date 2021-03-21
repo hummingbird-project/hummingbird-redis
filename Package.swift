@@ -19,7 +19,7 @@ let package = Package(
         ]),
         .testTarget(name: "HummingbirdRedisTests", dependencies: [
             .byName(name: "HummingbirdRedis"),
-            .product(name: "HummingbirdXCT", package: "hummingbird")
+            .product(name: "HummingbirdXCT", package: "hummingbird"),
         ]),
     ]
 )

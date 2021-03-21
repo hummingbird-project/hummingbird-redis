@@ -10,13 +10,13 @@ extension HBApplication {
             self.configuration = configuration
             self.application = application
             Self.createPools(configuration: configuration, application: application)
-            self.pubsubClient = application.eventLoopStorage.first{ _ in true }!.storage.redisPool
+            self.pubsubClient = application.eventLoopStorage.first { _ in true }!.storage.redisPool
 
             application.lifecycle.registerShutdown(label: "Redis", .eventLoopFuture(self.closePools))
         }
 
         public func pool(for eventLoop: EventLoop) -> RedisConnectionPool {
-            return application.eventLoopStorage.get(for: eventLoop).redisPool
+            return self.application.eventLoopStorage.get(for: eventLoop).redisPool
         }
 
         private static func createPools(configuration: RedisConfiguration, application: HBApplication) {
@@ -29,7 +29,7 @@ extension HBApplication {
         }
 
         private func closePools() -> EventLoopFuture<Void> {
-            let poolCloseFutures: [EventLoopFuture<Void>] = application.eventLoopStorage.map { ev, storage in
+            let poolCloseFutures: [EventLoopFuture<Void>] = self.application.eventLoopStorage.map { ev, storage in
                 let promise = ev.makePromise(of: Void.self)
                 storage.redisPool.close(promise: promise)
                 return promise.futureResult

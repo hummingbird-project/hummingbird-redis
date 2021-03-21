@@ -2,8 +2,8 @@
 // here https://github.com/vapor/redis/blob/master/Sources/Redis/RedisConfiguration.swift
 @_exported import struct Foundation.URL
 @_exported import struct Logging.Logger
-@_exported import struct NIO.TimeAmount
 import enum NIO.SocketAddress
+@_exported import struct NIO.TimeAmount
 import RediStack
 
 public struct RedisConfiguration {
@@ -65,7 +65,7 @@ public struct RedisConfiguration {
         database: Int? = nil,
         pool: PoolOptions = .init()
     ) throws {
-        if database != nil && database! < 0 { throw ValidationError.outOfBoundsDatabaseID }
+        if database != nil, database! < 0 { throw ValidationError.outOfBoundsDatabaseID }
 
         try self.init(
             serverAddresses: [.makeAddressResolvingHost(hostname, port: port)],
