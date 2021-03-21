@@ -25,16 +25,18 @@ jobs:
         ports:
           - 6379:6379
         options: --entrypoint redis-server
+
     container:
       image: ${{ matrix.image }}
       env:
         REDIS_HOSTNAME: "redis"
+
     steps:
     - name: Checkout
       uses: actions/checkout@v2
     - name: Test
       run: |
-        swift test --enable-test-discovery  --enable-code-coverage --sanitize=thread
+        swift test --enable-test-discovery --enable-code-coverage --sanitize=thread
     - name: Convert coverage files
       run: |
         llvm-cov export -format="lcov" \
@@ -45,4 +47,3 @@ jobs:
       uses: codecov/codecov-action@v1
       with:
         file: info.lcov
-
