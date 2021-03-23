@@ -19,6 +19,8 @@ jobs:
         options: --entrypoint redis-server
     container:
       image: swiftlang/swift:${{ matrix.image }}
+      env:
+        REDIS_HOSTNAME: "redis"
     steps:
     - name: Checkout
       uses: actions/checkout@v2
