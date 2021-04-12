@@ -17,28 +17,24 @@ import Hummingbird
 
 /// In memory driver for persist system for storing persistent cross request key/value pairs
 struct HBRedisPersistDriver: HBPersistDriver {
-    init(application: HBApplication) {
-        self.application = application
+    init(application: HBApplication) {}
+
+    func set<Object: Codable>(key: String, value: Object, request: HBRequest) -> EventLoopFuture<Void> {
+        request.redis.set(.init(key), toJSON: value)
     }
 
-    func set<Object: Codable>(key: String, value: Object, on eventLoop: EventLoop) -> EventLoopFuture<Void> {
-        self.application.redis.pool(for: eventLoop).set(.init(key), toJSON: value)
+    func set<Object: Codable>(key: String, value: Object, expires: TimeAmount, request: HBRequest) -> EventLoopFuture<Void> {
+        request.redis.setex(.init(key), toJSON: value, expirationInSeconds: Int(expires.nanoseconds / 1_000_000_000))
     }
 
-    func set<Object: Codable>(key: String, value: Object, expires: TimeAmount, on eventLoop: EventLoop) -> EventLoopFuture<Void> {
-        self.application.redis.pool(for: eventLoop).setex(.init(key), toJSON: value, expirationInSeconds: Int(expires.nanoseconds / 1_000_000_000))
+    func get<Object: Codable>(key: String, as object: Object.Type, request: HBRequest) -> EventLoopFuture<Object?> {
+        request.redis.get(.init(key), asJSON: object)
     }
 
-    func get<Object: Codable>(key: String, as object: Object.Type, on eventLoop: EventLoop) -> EventLoopFuture<Object?> {
-        self.application.redis.pool(for: eventLoop).get(.init(key), asJSON: object)
-    }
-
-    func remove(key: String, on eventLoop: EventLoop) -> EventLoopFuture<Void> {
-        self.application.redis.pool(for: eventLoop).delete(.init(key))
+    func remove(key: String, request: HBRequest) -> EventLoopFuture<Void> {
+        request.redis.delete(.init(key))
             .map { _ in }
     }
-
-    let application: HBApplication
 }
 
 /// Factory class for persist drivers
