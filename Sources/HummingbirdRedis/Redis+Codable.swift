@@ -141,5 +141,4 @@ extension RedisClient {
             return self.eventLoop.makeFailedFuture(error)
         }
     }
-
- }
+}

@@ -20,7 +20,7 @@ struct HBRedisPersistDriver: HBPersistDriver {
     init(application: HBApplication) {}
 
     func create<Object: Codable>(key: String, value: Object, expires: TimeAmount?, request: HBRequest) -> EventLoopFuture<Void> {
-        return set(key: key, value: value, expires: expires, request: request)
+        return self.set(key: key, value: value, expires: expires, request: request)
     }
 
     func set<Object: Codable>(key: String, value: Object, expires: TimeAmount?, request: HBRequest) -> EventLoopFuture<Void> {
