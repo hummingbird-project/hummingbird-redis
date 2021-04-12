@@ -19,12 +19,16 @@ import Hummingbird
 struct HBRedisPersistDriver: HBPersistDriver {
     init(application: HBApplication) {}
 
-    func set<Object: Codable>(key: String, value: Object, request: HBRequest) -> EventLoopFuture<Void> {
-        request.redis.set(.init(key), toJSON: value)
+    func create<Object: Codable>(key: String, value: Object, expires: TimeAmount?, request: HBRequest) -> EventLoopFuture<Void> {
+        return set(key: key, value: value, expires: expires, request: request)
     }
 
-    func set<Object: Codable>(key: String, value: Object, expires: TimeAmount, request: HBRequest) -> EventLoopFuture<Void> {
-        request.redis.setex(.init(key), toJSON: value, expirationInSeconds: Int(expires.nanoseconds / 1_000_000_000))
+    func set<Object: Codable>(key: String, value: Object, expires: TimeAmount?, request: HBRequest) -> EventLoopFuture<Void> {
+        if let expires = expires {
+            return request.redis.setex(.init(key), toJSON: value, expirationInSeconds: Int(expires.nanoseconds / 1_000_000_000))
+        } else {
+            return request.redis.set(.init(key), toJSON: value)
+        }
     }
 
     func get<Object: Codable>(key: String, as object: Object.Type, request: HBRequest) -> EventLoopFuture<Object?> {
