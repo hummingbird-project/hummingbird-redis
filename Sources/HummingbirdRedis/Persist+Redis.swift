@@ -17,12 +17,19 @@ import Hummingbird
 
 /// In memory driver for persist system for storing persistent cross request key/value pairs
 struct HBRedisPersistDriver: HBPersistDriver {
-    init(application: HBApplication) {}
+    init(application: HBApplication) {
+        precondition(
+            application.extensions.exists(\HBApplication.redis),
+            "Cannot use Redis driver without having setup Redis. Please call HBApplication.addRedis()"
+        )
+    }
 
+    /// create new key with value. This does the same as `set` in the redis driver
     func create<Object: Codable>(key: String, value: Object, expires: TimeAmount?, request: HBRequest) -> EventLoopFuture<Void> {
         return self.set(key: key, value: value, expires: expires, request: request)
     }
 
+    /// set value for key
     func set<Object: Codable>(key: String, value: Object, expires: TimeAmount?, request: HBRequest) -> EventLoopFuture<Void> {
         if let expires = expires {
             return request.redis.setex(.init(key), toJSON: value, expirationInSeconds: Int(expires.nanoseconds / 1_000_000_000))
@@ -31,10 +38,12 @@ struct HBRedisPersistDriver: HBPersistDriver {
         }
     }
 
+    /// get value for key
     func get<Object: Codable>(key: String, as object: Object.Type, request: HBRequest) -> EventLoopFuture<Object?> {
         request.redis.get(.init(key), asJSON: object)
     }
 
+    /// remove key
     func remove(key: String, request: HBRequest) -> EventLoopFuture<Void> {
         request.redis.delete(.init(key))
             .map { _ in }
