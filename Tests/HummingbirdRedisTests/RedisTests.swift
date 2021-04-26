@@ -35,7 +35,7 @@ final class HummingbirdRedisTests: XCTestCase {
         app.router.get("redis") { req in
             req.redis.send(command: "INFO").map(\.description)
         }
-        app.XCTStart()
+        try app.XCTStart()
         defer { app.XCTStop() }
 
         app.XCTExecute(uri: "/redis", method: .GET) { response in
