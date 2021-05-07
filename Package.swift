@@ -5,6 +5,7 @@ import PackageDescription
 
 let package = Package(
     name: "hummingbird-redis",
+    platforms: [.iOS(.v12), .tvOS(.v12)],
     products: [
         .library(name: "HummingbirdRedis", targets: ["HummingbirdRedis"]),
     ],
