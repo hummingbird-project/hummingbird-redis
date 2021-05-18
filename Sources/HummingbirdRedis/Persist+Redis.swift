@@ -14,6 +14,7 @@
 
 import Foundation
 import Hummingbird
+import RediStack
 
 /// In memory driver for persist system for storing persistent cross request key/value pairs
 struct HBRedisPersistDriver: HBPersistDriver {
@@ -24,12 +25,20 @@ struct HBRedisPersistDriver: HBPersistDriver {
         )
     }
 
-    /// create new key with value. This does the same as `set` in the redis driver
+    /// create new key with value. If key already exist throw `HBPersistError.duplicate` error
     func create<Object: Codable>(key: String, value: Object, expires: TimeAmount?, request: HBRequest) -> EventLoopFuture<Void> {
-        return self.set(key: key, value: value, expires: expires, request: request)
+        let expiration: RedisSetCommandExpiration? = expires.map { .seconds(Int($0.nanoseconds / 1_000_000_000)) }
+        return request.redis.set(.init(key), toJSON: value, onCondition: .keyDoesNotExist, expiration: expiration).flatMapThrowing { result in
+            switch result {
+            case .ok:
+                return
+            case.conditionNotMet:
+                throw HBPersistError.duplicate
+            }
+        }
     }
 
-    /// set value for key
+    /// set value for key. If value already exists overwrite it
     func set<Object: Codable>(key: String, value: Object, expires: TimeAmount?, request: HBRequest) -> EventLoopFuture<Void> {
         if let expires = expires {
             return request.redis.setex(.init(key), toJSON: value, expirationInSeconds: Int(expires.nanoseconds / 1_000_000_000))
