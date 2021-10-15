@@ -37,7 +37,7 @@ public class HBRedisJobQueue: HBJobQueue {
     let application: HBApplication
     let configuration: Configuration
     public var pollTime: TimeAmount { self.configuration.pollTime }
-    
+
     /// Initialize redis job queue
     /// - Parameters:
     ///   - application: Application
@@ -46,20 +46,20 @@ public class HBRedisJobQueue: HBJobQueue {
         self.application = application
         self.configuration = configuration
     }
-    
+
     /// This is run at initialization time.
     ///
     /// Will push all the jobs in the processing queue back onto to the main queue so they can
     /// be rerun
     /// - Parameter eventLoop: eventLoop to run process on
     public func onInit(on eventLoop: EventLoop) -> EventLoopFuture<Void> {
-        if configuration.rerunProcessing {
-            return rerunProcessing(on: eventLoop)
+        if self.configuration.rerunProcessing {
+            return self.rerunProcessing(on: eventLoop)
         } else {
             return eventLoop.makeSucceededVoidFuture()
         }
     }
-    
+
     /// Push Job onto queue
     /// - Parameters:
     ///   - job: Job descriptor
@@ -76,7 +76,7 @@ public class HBRedisJobQueue: HBJobQueue {
                 return queuedJob
             }
     }
-    
+
     /// Pop Job off queue
     /// - Parameter eventLoop: eventLoop to do work on
     /// - Returns: queued job
@@ -98,7 +98,7 @@ public class HBRedisJobQueue: HBJobQueue {
                     }
             }
     }
-    
+
     /// Flag job is done
     ///
     /// Removes  job id from processing queue
@@ -108,7 +108,7 @@ public class HBRedisJobQueue: HBJobQueue {
     public func finished(jobId: JobIdentifier, on eventLoop: EventLoop) -> EventLoopFuture<Void> {
         let pool = self.application.redis.pool(for: eventLoop)
         return pool.lrem(jobId.description, from: self.configuration.processingQueueKey, count: 0)
-            .flatMap { count in
+            .flatMap { _ in
                 return self.delete(jobId: jobId, pool: pool)
             }
     }

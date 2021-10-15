@@ -32,7 +32,7 @@ struct HBRedisPersistDriver: HBPersistDriver {
             switch result {
             case .ok:
                 return
-            case.conditionNotMet:
+            case .conditionNotMet:
                 throw HBPersistError.duplicate
             }
         }
