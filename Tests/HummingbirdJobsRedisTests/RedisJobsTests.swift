@@ -28,7 +28,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
             static let expectation = XCTestExpectation(description: "Jobs Completed")
 
             let value: Int
-            func execute(on eventLoop: EventLoop) -> EventLoopFuture<Void> {
+            func execute(on eventLoop: EventLoop, logger: Logger) -> EventLoopFuture<Void> {
                 print(self.value)
                 return eventLoop.scheduleTask(in: .milliseconds(Int64.random(in: 10..<50))) {
                     Self.expectation.fulfill()
@@ -73,7 +73,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
             static let expectation = XCTestExpectation(description: "Jobs Completed")
 
             let value: Int
-            func execute(on eventLoop: EventLoop) -> EventLoopFuture<Void> {
+            func execute(on eventLoop: EventLoop, logger: Logger) -> EventLoopFuture<Void> {
                 print(self.value)
                 return eventLoop.scheduleTask(in: .milliseconds(Int64.random(in: 10..<50))) {
                     Self.expectation.fulfill()
@@ -118,7 +118,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
             static let expectation = XCTestExpectation(description: "Jobs Completed")
 
             let value: Int
-            func execute(on eventLoop: EventLoop) -> EventLoopFuture<Void> {
+            func execute(on eventLoop: EventLoop, logger: Logger) -> EventLoopFuture<Void> {
                 print(self.value)
                 return eventLoop.scheduleTask(in: .milliseconds(Int64.random(in: 10..<50))) {
                     Self.expectation.fulfill()
@@ -168,7 +168,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
             static let name = "testErrorRetryCount"
             static let maxRetryCount = 3
             static let expectation = XCTestExpectation(description: "Jobs Completed")
-            func execute(on eventLoop: EventLoop) -> EventLoopFuture<Void> {
+            func execute(on eventLoop: EventLoop, logger: Logger) -> EventLoopFuture<Void> {
                 Self.expectation.fulfill()
                 return eventLoop.makeFailedFuture(FailedError())
             }
@@ -199,7 +199,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
         struct TestJob: HBJob {
             static let name = "testSecondQueue"
             static let expectation = XCTestExpectation(description: "Jobs Completed")
-            func execute(on eventLoop: EventLoop) -> EventLoopFuture<Void> {
+            func execute(on eventLoop: EventLoop, logger: Logger) -> EventLoopFuture<Void> {
                 Self.expectation.fulfill()
                 return eventLoop.makeSucceededVoidFuture()
             }
@@ -235,12 +235,12 @@ final class HummingbirdRedisJobsTests: XCTestCase {
             static let maxRetryCount: Int = 2
             static let expectation = XCTestExpectation(description: "Jobs Completed")
             static let errorExpectation = XCTestExpectation(description: "Jobs Errored")
-            func execute(on eventLoop: EventLoop) -> EventLoopFuture<Void> {
+            func execute(on eventLoop: EventLoop, logger: Logger) -> EventLoopFuture<Void> {
                 Self.expectation.fulfill()
                 return eventLoop.makeFailedFuture(FailedError())
             }
 
-            func onError(_ error: Error, on eventLoop: EventLoop) -> EventLoopFuture<Void> {
+            func onError(_ error: Error, on eventLoop: EventLoop, logger: Logger) -> EventLoopFuture<Void> {
                 Self.errorExpectation.fulfill()
                 return eventLoop.makeFailedFuture(error)
             }
@@ -289,7 +289,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
             static let name = "testShutdownJob"
             static var started: Bool = false
             static var finished: Bool = false
-            func execute(on eventLoop: EventLoop) -> EventLoopFuture<Void> {
+            func execute(on eventLoop: EventLoop, logger: Logger) -> EventLoopFuture<Void> {
                 Self.started = true
                 let job = eventLoop.scheduleTask(in: .milliseconds(500)) {
                     Self.finished = true
