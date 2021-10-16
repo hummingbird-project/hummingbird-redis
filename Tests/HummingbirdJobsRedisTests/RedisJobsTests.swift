@@ -282,6 +282,62 @@ final class HummingbirdRedisJobsTests: XCTestCase {
         XCTAssertTrue(TestJob.started)
         XCTAssertTrue(TestJob.finished)
     }
+
+    /// creates job that errors on first attempt, and is left on processing queue and
+    /// is then rerun on startup of new server
+    func testRerunAtStartup() throws {
+        struct RetryError: Error {}
+        class TestJob: HBJob {
+            static let name = "testRerunAtStartup"
+            static let maxRetryCount: Int = 0
+            static var firstTime: Bool = true
+            static var finished: Bool = false
+            func execute(on eventLoop: EventLoop, logger: Logger) -> EventLoopFuture<Void> {
+                if Self.firstTime {
+                    Self.firstTime = false
+                    return eventLoop.makeFailedFuture(RetryError())
+                } else {
+                    Self.finished = true
+                    return eventLoop.makeSucceededVoidFuture()
+                }
+            }
+        }
+        TestJob.register()
+
+        func createApp() throws -> HBApplication {
+            let app = HBApplication(testing: .live)
+            try app.addRedis(
+                configuration: .init(
+                    hostname: Self.redisHostname,
+                    port: 6379,
+                    pool: .init(connectionRetryTimeout: .seconds(1))
+                )
+            )
+            app.logger.logLevel = .trace
+            app.addJobs(using: .redis(configuration: .init(queueKey: "testRerunAtStartup")))
+            return app
+        }
+
+        let app = try createApp()
+        try app.start()
+        app.jobs.queue.enqueue(TestJob(), on: app.eventLoopGroup.next())
+        // stall to give job chance to start running
+        Thread.sleep(forTimeInterval: 0.5)
+        app.stop()
+        app.wait()
+
+        XCTAssertFalse(TestJob.firstTime)
+        XCTAssertFalse(TestJob.finished)
+
+        let app2 = try createApp()
+        try app2.start()
+        // stall to give job chance to start running
+        Thread.sleep(forTimeInterval: 0.5)
+        app2.stop()
+        app2.wait()
+
+        XCTAssertTrue(TestJob.finished)
+    }
 }
 
 extension HBJobQueueId {
