@@ -48,7 +48,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
             )
         )
         app.logger.logLevel = .trace
-        app.addJobs(using: .redis(configuration: .init(queueKey: "testBasic")))
+        app.addJobs(using: .redis(configuration: .init(queueKey: "testBasic")), numWorkers: 1)
 
         try app.start()
         defer { app.stop() }
@@ -138,7 +138,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
             )
         )
         app.logger.logLevel = .trace
-        app.addJobs(using: .redis(configuration: .init(queueKey: "testBasic")))
+        app.addJobs(using: .redis(configuration: .init(queueKey: "testBasic")), numWorkers: 1)
 
         try app.start()
         defer { app.stop() }
@@ -185,7 +185,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
             )
         )
         app.logger.logLevel = .trace
-        app.addJobs(using: .redis(configuration: .init(queueKey: "testErrorRetryCount")))
+        app.addJobs(using: .redis(configuration: .init(queueKey: "testErrorRetryCount")), numWorkers: 1)
 
         try app.start()
         defer { app.stop() }
@@ -216,8 +216,8 @@ final class HummingbirdRedisJobsTests: XCTestCase {
             )
         )
         app.logger.logLevel = .trace
-        app.addJobs(using: .memory)
-        app.jobs.registerQueue(.redisTest, queue: .redis(configuration: .init(queueKey: "testSecondQueue")))
+        app.addJobs(using: .memory, numWorkers: 1)
+        app.jobs.registerQueue(.redisTest, queue: .redis(configuration: .init(queueKey: "testSecondQueue")), numWorkers: 1)
 
         try app.start()
         defer { app.stop() }
@@ -237,7 +237,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
             )
         )
         app.logger.logLevel = .trace
-        app.addJobs(using: .redis(configuration: .init(queueKey: "testBasic")))
+        app.addJobs(using: .redis(configuration: .init(queueKey: "testBasic")), numWorkers: 1)
         try app.start()
         app.stop()
         app.wait()
@@ -267,7 +267,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
             )
         )
         app.logger.logLevel = .trace
-        app.addJobs(using: .redis(configuration: .init(queueKey: "testShutdownJob")))
+        app.addJobs(using: .redis(configuration: .init(queueKey: "testShutdownJob")), numWorkers: 1)
 
         try app.start()
 
@@ -314,7 +314,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
                 )
             )
             app.logger.logLevel = .trace
-            app.addJobs(using: .redis(configuration: .init(queueKey: "testRerunAtStartup")))
+            app.addJobs(using: .redis(configuration: .init(queueKey: "testRerunAtStartup")), numWorkers: 1)
             return app
         }
 
