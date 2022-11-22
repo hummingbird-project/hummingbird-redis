@@ -2,7 +2,7 @@
 //
 // This source file is part of the Hummingbird server framework project
 //
-// Copyright (c) 2021-2021 the Hummingbird authors
+// Copyright (c) 2021-2022 the Hummingbird authors
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
@@ -16,7 +16,7 @@ import Foundation
 import Hummingbird
 import RediStack
 
-/// In memory driver for persist system for storing persistent cross request key/value pairs
+/// Redis driver for persist system for storing persistent cross request key/value pairs
 struct HBRedisPersistDriver: HBPersistDriver {
     init(application: HBApplication) {
         precondition(

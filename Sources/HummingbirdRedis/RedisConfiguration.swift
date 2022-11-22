@@ -20,7 +20,7 @@ import enum NIO.SocketAddress
 @_exported import struct NIO.TimeAmount
 import RediStack
 
-public struct RedisConfiguration {
+public struct HBRedisConfiguration {
     public typealias ValidationError = RedisConnection.Configuration.ValidationError
 
     public var serverAddresses: [SocketAddress]
@@ -103,7 +103,7 @@ public struct RedisConfiguration {
 }
 
 extension RedisConnectionPool.Configuration {
-    internal init(_ config: RedisConfiguration, defaultLogger: Logger) {
+    internal init(_ config: HBRedisConfiguration, defaultLogger: Logger) {
         self.init(
             initialServerConnectionAddresses: config.serverAddresses,
             maximumConnectionCount: config.pool.maximumConnectionCount,
