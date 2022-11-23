@@ -15,7 +15,14 @@
 import Hummingbird
 @testable import HummingbirdRedis
 import HummingbirdXCT
+import RediStack
 import XCTest
+
+extension RedisCommand {
+    public static func info() -> RedisCommand<String> {
+        return .init(keyword: "INFO", arguments: [])
+    }
+}
 
 final class HummingbirdRedisTests: XCTestCase {
     static let env = HBEnvironment()
@@ -25,15 +32,15 @@ final class HummingbirdRedisTests: XCTestCase {
         let app = HBApplication()
         try app.addRedis(configuration: .init(hostname: Self.redisHostname, port: 6379))
 
-        let info = try app.redis.send(command: "INFO").wait()
-        XCTAssertEqual(info.string?.contains("redis_version"), true)
+        let info = try app.redis.send(.info(), eventLoop: nil, logger: nil).wait()
+        XCTAssertEqual(info.contains("redis_version"), true)
     }
 
     func testRouteHandler() throws {
         let app = HBApplication(testing: .live)
         try app.addRedis(configuration: .init(hostname: Self.redisHostname, port: 6379))
         app.router.get("redis") { req in
-            req.redis.send(command: "INFO").map(\.description)
+            req.redis.send(.info(), eventLoop: nil, logger: nil).map(\.description)
         }
         try app.XCTStart()
         defer { app.XCTStop() }

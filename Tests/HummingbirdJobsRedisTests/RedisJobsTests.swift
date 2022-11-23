@@ -43,8 +43,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
         try app.addRedis(
             configuration: .init(
                 hostname: Self.redisHostname,
-                port: 6379,
-                pool: .init(connectionRetryTimeout: .seconds(1))
+                port: 6379
             )
         )
         app.logger.logLevel = .trace
@@ -87,8 +86,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
         try app.addRedis(
             configuration: .init(
                 hostname: Self.redisHostname,
-                port: 6379,
-                pool: .init(connectionRetryTimeout: .seconds(1))
+                port: 6379
             )
         )
         app.logger.logLevel = .trace
@@ -133,8 +131,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
         try app.addRedis(
             configuration: .init(
                 hostname: Self.redisHostname,
-                port: 6379,
-                pool: .init(connectionRetryTimeout: .seconds(1))
+                port: 6379
             )
         )
         app.logger.logLevel = .trace
@@ -180,8 +177,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
         try app.addRedis(
             configuration: .init(
                 hostname: Self.redisHostname,
-                port: 6379,
-                pool: .init(connectionRetryTimeout: .seconds(1))
+                port: 6379
             )
         )
         app.logger.logLevel = .trace
@@ -211,8 +207,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
         try app.addRedis(
             configuration: .init(
                 hostname: Self.redisHostname,
-                port: 6379,
-                pool: .init(connectionRetryTimeout: .seconds(1))
+                port: 6379
             )
         )
         app.logger.logLevel = .trace
@@ -232,8 +227,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
         try app.addRedis(
             configuration: .init(
                 hostname: Self.redisHostname,
-                port: 6379,
-                pool: .init(connectionRetryTimeout: .seconds(1))
+                port: 6379
             )
         )
         app.logger.logLevel = .trace
@@ -262,8 +256,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
         try app.addRedis(
             configuration: .init(
                 hostname: Self.redisHostname,
-                port: 6379,
-                pool: .init(connectionRetryTimeout: .seconds(1))
+                port: 6379
             )
         )
         app.logger.logLevel = .trace
@@ -309,8 +302,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
             try app.addRedis(
                 configuration: .init(
                     hostname: Self.redisHostname,
-                    port: 6379,
-                    pool: .init(connectionRetryTimeout: .seconds(1))
+                    port: 6379
                 )
             )
             app.logger.logLevel = .trace

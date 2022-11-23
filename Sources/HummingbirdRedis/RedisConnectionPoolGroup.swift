@@ -20,8 +20,8 @@ import RediStack
 /// Store Redis connection pool array for an EventLoopGroup.
 ///
 /// Provides a connection pool for each EventLoop in the EventLoopGroup
-public struct RedisConnectionPoolGroup {
-    /// Initialise RedisConnectionPoolGroup
+public struct HBRedisConnectionPoolGroup {
+    /// Initialise HBRedisConnectionPoolGroup
     /// - Parameters:
     ///   - configuration: redis configuration
     ///   - eventLoopGroup: EventLoopGroup to create connections for
@@ -70,57 +70,26 @@ extension EventLoop {
     }
 }
 
-/// Extend `RedisConnectionPoolGroup`` to provide `RedisClient`` functionality
-extension RedisConnectionPoolGroup: RedisClient {
-    public var eventLoop: EventLoop {
-        self.eventLoopGroup.next()
+/// Extend `HBRedisConnectionPoolGroup`` to provide `RedisClient`` functionality
+extension HBRedisConnectionPoolGroup: RedisClient {
+    public func unsubscribe(from channels: [RediStack.RedisChannelName], eventLoop: NIOCore.EventLoop?, logger: Logging.Logger?) -> NIOCore.EventLoopFuture<Void> {
+        self.pool(for: eventLoop ?? self.eventLoop).unsubscribe(from: channels, eventLoop: nil, logger: logger)
     }
 
-    public var pubsubClient: RedisClient {
-        self.pools.first!.value
+    public func send<CommandResult>(_ command: RediStack.RedisCommand<CommandResult>, eventLoop: NIOCore.EventLoop?, logger: Logging.Logger?) -> NIOCore.EventLoopFuture<CommandResult> {
+        self.pool(for: eventLoop ?? self.eventLoop).send(command, eventLoop: nil, logger: logger)
+    }
+
+    public func punsubscribe(from patterns: [String], eventLoop: NIOCore.EventLoop?, logger: Logging.Logger?) -> NIOCore.EventLoopFuture<Void> {
+        self.pool(for: eventLoop ?? self.eventLoop).punsubscribe(from: patterns, eventLoop: nil, logger: logger)
+    }
+
+    public var eventLoop: EventLoop {
+        self.eventLoopGroup.next()
     }
 
     public func logging(to logger: Logger) -> RedisClient {
         self.pool(for: self.eventLoop)
             .logging(to: logger)
-    }
-
-    public func send(command: String, with arguments: [RESPValue]) -> EventLoopFuture<RESPValue> {
-        self.pool(for: self.eventLoop)
-            .send(command: command, with: arguments)
-    }
-
-    public func subscribe(
-        to channels: [RedisChannelName],
-        messageReceiver receiver: @escaping RedisSubscriptionMessageReceiver,
-        onSubscribe subscribeHandler: RedisSubscriptionChangeHandler?,
-        onUnsubscribe unsubscribeHandler: RedisSubscriptionChangeHandler?
-    ) -> EventLoopFuture<Void> {
-        return self
-            .pubsubClient
-            .subscribe(to: channels, messageReceiver: receiver, onSubscribe: subscribeHandler, onUnsubscribe: unsubscribeHandler)
-    }
-
-    public func unsubscribe(from channels: [RedisChannelName]) -> EventLoopFuture<Void> {
-        return self
-            .pubsubClient
-            .unsubscribe(from: channels)
-    }
-
-    public func psubscribe(
-        to patterns: [String],
-        messageReceiver receiver: @escaping RedisSubscriptionMessageReceiver,
-        onSubscribe subscribeHandler: RedisSubscriptionChangeHandler?,
-        onUnsubscribe unsubscribeHandler: RedisSubscriptionChangeHandler?
-    ) -> EventLoopFuture<Void> {
-        return self
-            .pubsubClient
-            .psubscribe(to: patterns, messageReceiver: receiver, onSubscribe: subscribeHandler, onUnsubscribe: unsubscribeHandler)
-    }
-
-    public func punsubscribe(from patterns: [String]) -> EventLoopFuture<Void> {
-        return self
-            .pubsubClient
-            .punsubscribe(from: patterns)
     }
 }

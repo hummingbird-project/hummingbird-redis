@@ -14,7 +14,7 @@
 
 import Hummingbird
 extension HBApplication {
-    public var redis: RedisConnectionPoolGroup {
+    public var redis: HBRedisConnectionPoolGroup {
         self.extensions.get(\.redis)
     }
 

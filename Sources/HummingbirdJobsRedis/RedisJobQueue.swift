@@ -70,7 +70,7 @@ public class HBRedisJobQueue: HBJobQueue {
         let queuedJob = HBQueuedJob(job)
         return self.set(jobId: queuedJob.id, job: queuedJob.job, pool: pool)
             .flatMap {
-                pool.lpush(queuedJob.id.redisKey, into: self.configuration.queueKey)
+                pool.send(.lpush(queuedJob.id.redisKey, into: self.configuration.queueKey))
             }
             .map { _ in
                 return queuedJob
@@ -82,12 +82,12 @@ public class HBRedisJobQueue: HBJobQueue {
     /// - Returns: queued job
     public func pop(on eventLoop: EventLoop) -> EventLoopFuture<HBQueuedJob?> {
         let pool = self.application.redis.pool(for: eventLoop)
-        return pool.rpoplpush(from: self.configuration.queueKey, to: self.configuration.processingQueueKey)
-            .flatMap { key -> EventLoopFuture<HBQueuedJob?> in
-                if key.isNull {
+        return pool.send(.rpoplpush(from: self.configuration.queueKey, to: self.configuration.processingQueueKey))
+            .flatMap { value -> EventLoopFuture<HBQueuedJob?> in
+                guard let value = value else {
                     return eventLoop.makeSucceededFuture(nil)
                 }
-                guard let key = String(fromRESP: key) else {
+                guard let key = String(fromRESP: value) else {
                     return eventLoop.makeFailedFuture(RedisQueueError.unexpectedRedisKeyType)
                 }
                 let identifier = JobIdentifier(fromKey: key)
@@ -107,7 +107,7 @@ public class HBRedisJobQueue: HBJobQueue {
     ///   - eventLoop: eventLoop to do work on
     public func finished(jobId: JobIdentifier, on eventLoop: EventLoop) -> EventLoopFuture<Void> {
         let pool = self.application.redis.pool(for: eventLoop)
-        return pool.lrem(jobId.description, from: self.configuration.processingQueueKey, count: 0)
+        return pool.send(.lrem(jobId.description, from: self.configuration.processingQueueKey, count: 0))
             .flatMap { _ in
                 return self.delete(jobId: jobId, pool: pool)
             }
@@ -121,14 +121,14 @@ public class HBRedisJobQueue: HBJobQueue {
         let promise = eventLoop.makePromise(of: Void.self)
         let pool = self.application.redis.pool(for: eventLoop)
         func _moveOneEntry() {
-            pool.rpoplpush(from: self.configuration.processingQueueKey, to: self.configuration.queueKey)
+            pool.send(.rpoplpush(from: self.configuration.processingQueueKey, to: self.configuration.queueKey))
                 .whenComplete { result in
                     switch result {
                     case .success(let key):
-                        if key.isNull {
-                            promise.succeed(())
-                        } else {
+                        if key != nil {
                             _moveOneEntry()
+                        } else {
+                            promise.succeed(())
                         }
                     case .failure(let error):
                         promise.fail(error)

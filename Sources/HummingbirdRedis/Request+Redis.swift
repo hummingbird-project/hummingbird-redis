@@ -26,58 +26,39 @@ extension HBRequest {
 }
 
 extension HBRequest.Redis: RedisClient {
-    public var eventLoop: EventLoop {
-        self.request.eventLoop
+    public var eventLoop: NIOCore.EventLoop {
+        return request.eventLoop
     }
 
-    public func logging(to logger: Logger) -> RedisClient {
-        self.request.application.redis
-            .pool(for: self.eventLoop)
+    public func logging(to logger: Logging.Logger) -> RediStack.RedisClient {
+        return self.request.application.redis
+            .pool(for: request.eventLoop)
             .logging(to: logger)
     }
 
-    public func send(command: String, with arguments: [RESPValue]) -> EventLoopFuture<RESPValue> {
-        self.request.application.redis
-            .pool(for: self.eventLoop)
-            .logging(to: self.request.logger)
-            .send(command: command, with: arguments)
+    public func unsubscribe(from channels: [RediStack.RedisChannelName]) -> NIOCore.EventLoopFuture<Void> {
+        self.request.application.redis.unsubscribe(from: channels, eventLoop: request.eventLoop, logger: request.logger)
     }
 
-    public func subscribe(
-        to channels: [RedisChannelName],
-        messageReceiver receiver: @escaping RedisSubscriptionMessageReceiver,
-        onSubscribe subscribeHandler: RedisSubscriptionChangeHandler?,
-        onUnsubscribe unsubscribeHandler: RedisSubscriptionChangeHandler?
-    ) -> EventLoopFuture<Void> {
-        return self.request.application.redis
-            .pubsubClient
-            .logging(to: self.request.logger)
-            .subscribe(to: channels, messageReceiver: receiver, onSubscribe: subscribeHandler, onUnsubscribe: unsubscribeHandler)
+    public func punsubscribe(from patterns: [String]) -> NIOCore.EventLoopFuture<Void> {
+        self.request.application.redis.punsubscribe(from: patterns, eventLoop: request.eventLoop, logger: request.logger)
     }
 
-    public func unsubscribe(from channels: [RedisChannelName]) -> EventLoopFuture<Void> {
-        return self.request.application.redis
-            .pubsubClient
-            .logging(to: self.request.logger)
-            .unsubscribe(from: channels)
+    public func send<CommandResult>(_ command: RediStack.RedisCommand<CommandResult>) -> NIOCore.EventLoopFuture<CommandResult> {
+        self.request.application.redis.pool(for: self.request.eventLoop)
+            .send(command, eventLoop: nil, logger: request.logger)
     }
 
-    public func psubscribe(
-        to patterns: [String],
-        messageReceiver receiver: @escaping RedisSubscriptionMessageReceiver,
-        onSubscribe subscribeHandler: RedisSubscriptionChangeHandler?,
-        onUnsubscribe unsubscribeHandler: RedisSubscriptionChangeHandler?
-    ) -> EventLoopFuture<Void> {
-        return self.request.application.redis
-            .pubsubClient
-            .logging(to: self.request.logger)
-            .psubscribe(to: patterns, messageReceiver: receiver, onSubscribe: subscribeHandler, onUnsubscribe: unsubscribeHandler)
+    public func unsubscribe(from channels: [RediStack.RedisChannelName], eventLoop: NIOCore.EventLoop?, logger: Logging.Logger?) -> NIOCore.EventLoopFuture<Void> {
+        self.request.application.redis.unsubscribe(from: channels, eventLoop: eventLoop ?? request.eventLoop, logger: logger ?? request.logger)
     }
 
-    public func punsubscribe(from patterns: [String]) -> EventLoopFuture<Void> {
-        return self.request.application.redis
-            .pubsubClient
-            .logging(to: self.request.logger)
-            .punsubscribe(from: patterns)
+    public func punsubscribe(from patterns: [String], eventLoop: NIOCore.EventLoop?, logger: Logging.Logger?) -> NIOCore.EventLoopFuture<Void> {
+        self.request.application.redis.punsubscribe(from: patterns, eventLoop: eventLoop ?? request.eventLoop, logger: logger ?? request.logger)
+    }
+
+    public func send<CommandResult>(_ command: RediStack.RedisCommand<CommandResult>, eventLoop: NIOCore.EventLoop?, logger: Logging.Logger?) -> NIOCore.EventLoopFuture<CommandResult> {
+        self.request.application.redis.pool(for: eventLoop ?? self.request.eventLoop)
+            .send(command, eventLoop: nil, logger: logger ?? request.logger)
     }
 }
