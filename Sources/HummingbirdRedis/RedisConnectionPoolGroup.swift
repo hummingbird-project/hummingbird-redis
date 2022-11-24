@@ -72,15 +72,15 @@ extension EventLoop {
 
 /// Extend `HBRedisConnectionPoolGroup`` to provide `RedisClient`` functionality
 extension HBRedisConnectionPoolGroup: RedisClient {
-    public func unsubscribe(from channels: [RediStack.RedisChannelName], eventLoop: NIOCore.EventLoop?, logger: Logging.Logger?) -> NIOCore.EventLoopFuture<Void> {
+    public func unsubscribe(from channels: [RediStack.RedisChannelName], eventLoop: NIOCore.EventLoop? = nil, logger: Logging.Logger? = nil) -> NIOCore.EventLoopFuture<Void> {
         self.pool(for: eventLoop ?? self.eventLoop).unsubscribe(from: channels, eventLoop: nil, logger: logger)
     }
 
-    public func send<CommandResult>(_ command: RediStack.RedisCommand<CommandResult>, eventLoop: NIOCore.EventLoop?, logger: Logging.Logger?) -> NIOCore.EventLoopFuture<CommandResult> {
+    public func send<CommandResult>(_ command: RediStack.RedisCommand<CommandResult>, eventLoop: NIOCore.EventLoop? = nil, logger: Logging.Logger? = nil) -> NIOCore.EventLoopFuture<CommandResult> {
         self.pool(for: eventLoop ?? self.eventLoop).send(command, eventLoop: nil, logger: logger)
     }
 
-    public func punsubscribe(from patterns: [String], eventLoop: NIOCore.EventLoop?, logger: Logging.Logger?) -> NIOCore.EventLoopFuture<Void> {
+    public func punsubscribe(from patterns: [String], eventLoop: NIOCore.EventLoop? = nil, logger: Logging.Logger? = nil) -> NIOCore.EventLoopFuture<Void> {
         self.pool(for: eventLoop ?? self.eventLoop).punsubscribe(from: patterns, eventLoop: nil, logger: logger)
     }
 
