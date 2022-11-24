@@ -70,7 +70,7 @@ extension EventLoop {
     }
 }
 
-/// Extend `HBRedisConnectionPoolGroup`` to provide `RedisClient`` functionality
+/// Extend `HBRedisConnectionPoolGroup`` to provide ``RedisClient`` functionality
 extension HBRedisConnectionPoolGroup: RedisClient {
     public func unsubscribe(from channels: [RediStack.RedisChannelName], eventLoop: NIOCore.EventLoop? = nil, logger: Logging.Logger? = nil) -> NIOCore.EventLoopFuture<Void> {
         self.pool(for: eventLoop ?? self.eventLoop).unsubscribe(from: channels, eventLoop: nil, logger: logger)
