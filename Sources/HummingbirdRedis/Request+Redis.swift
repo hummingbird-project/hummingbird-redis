@@ -37,11 +37,13 @@ extension HBRequest.Redis: RedisClient {
     }
 
     public func unsubscribe(from channels: [RediStack.RedisChannelName]) -> NIOCore.EventLoopFuture<Void> {
-        self.request.application.redis.unsubscribe(from: channels, eventLoop: request.eventLoop, logger: request.logger)
+        self.request.application.redis.pool(for: self.request.eventLoop)
+            .unsubscribe(from: channels, eventLoop: request.eventLoop, logger: request.logger)
     }
 
     public func punsubscribe(from patterns: [String]) -> NIOCore.EventLoopFuture<Void> {
-        self.request.application.redis.punsubscribe(from: patterns, eventLoop: request.eventLoop, logger: request.logger)
+        self.request.application.redis.pool(for: self.request.eventLoop)
+            .punsubscribe(from: patterns, eventLoop: request.eventLoop, logger: request.logger)
     }
 
     public func send<CommandResult>(_ command: RediStack.RedisCommand<CommandResult>) -> NIOCore.EventLoopFuture<CommandResult> {
