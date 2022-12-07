@@ -97,6 +97,15 @@ public class HBRedisJobQueue: HBJobQueue {
                         return .init(id: identifier, job: job)
                     }
             }
+            // temporary fix while Redis throws an error parsing null
+            .flatMapErrorThrowing { error in
+                switch error {
+                case let error as RedisClientError where error == RedisClientError.failedRESPConversion(to: RESPValue?.self):
+                    return nil
+                default:
+                    throw error
+                }
+            }
     }
 
     /// Flag job is done
