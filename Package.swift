@@ -12,7 +12,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "1.0.0-alpha"),
-        .package(url: "https://gitlab.com/mordil/RediStack.git", .exact("2.0.0-beta.1")),
+        .package(url: "https://gitlab.com/mordil/RediStack.git", from: "2.0.0-gamma"),
     ],
     targets: [
         .target(name: "HummingbirdRedis", dependencies: [

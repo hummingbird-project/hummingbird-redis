@@ -87,9 +87,4 @@ extension HBRedisConnectionPoolGroup: RedisClient {
     public var eventLoop: EventLoop {
         self.eventLoopGroup.next()
     }
-
-    public func logging(to logger: Logger) -> RedisClient {
-        self.pool(for: self.eventLoop)
-            .logging(to: logger)
-    }
 }
