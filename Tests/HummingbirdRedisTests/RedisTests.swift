@@ -45,7 +45,7 @@ final class HummingbirdRedisTests: XCTestCase {
         try app.XCTStart()
         defer { app.XCTStop() }
 
-        app.XCTExecute(uri: "/redis", method: .GET) { response in
+        try app.XCTExecute(uri: "/redis", method: .GET) { response in
             var body = try XCTUnwrap(response.body)
             XCTAssertEqual(body.readString(length: body.readableBytes)?.contains("redis_version"), true)
         }
