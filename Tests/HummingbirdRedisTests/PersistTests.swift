@@ -182,4 +182,33 @@ final class PersistTests: XCTestCase {
             XCTAssertEqual(String(buffer: body), "ThisIsTest1")
         }
     }
+
+    func testPersistOutsideApplication() async throws {
+        let app = try createApplication()
+
+        let redisConnectionPoolGroup = try RedisConnectionPoolGroup(
+            configuration: .init(hostname: Self.redisHostname, port: 6379),
+            eventLoopGroup: app.eventLoopGroup,
+            logger: app.logger
+        )
+        let persist = HBRedisPersistDriver(redisConnectionPoolGroup: redisConnectionPoolGroup)
+
+        app.router.put("test/:value") { request -> HTTPResponseStatus in
+            let value = try request.parameters.require("value")
+            try await persist.set(key: "test", value: value, expires: nil, request: request).get()
+            return .ok
+        }
+        app.router.get("test") { request -> String? in
+            try await persist.get(key: "test", as: String.self, request: request).get()
+        }
+        try app.XCTStart()
+        defer { app.XCTStop() }
+
+        let tag = UUID().uuidString
+        try app.XCTExecute(uri: "/test/\(tag)", method: .PUT) { _ in }
+        try app.XCTExecute(uri: "/test/", method: .GET) { response in
+            let body = try XCTUnwrap(response.body)
+            XCTAssertEqual(String(buffer: body), tag)
+        }
+    }
 }

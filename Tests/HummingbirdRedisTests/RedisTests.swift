@@ -15,6 +15,7 @@
 import Hummingbird
 @testable import HummingbirdRedis
 import HummingbirdXCT
+import NIOPosix
 import XCTest
 
 final class HummingbirdRedisTests: XCTestCase {
@@ -42,5 +43,22 @@ final class HummingbirdRedisTests: XCTestCase {
             var body = try XCTUnwrap(response.body)
             XCTAssertEqual(body.readString(length: body.readableBytes)?.contains("redis_version"), true)
         }
+    }
+
+    func testRedisOutsideApplication() async throws {
+        let app = HBApplication(testing: .live)
+        try app.XCTStart()
+        defer { app.XCTStop() }
+
+        let redisConnectionPoolGroup = try RedisConnectionPoolGroup(
+            configuration: .init(hostname: Self.redisHostname, port: 6379),
+            eventLoopGroup: app.eventLoopGroup,
+            logger: app.logger
+        )
+        let eventLoop = app.eventLoopGroup.any()
+        let redis = redisConnectionPoolGroup.pool(for: eventLoop)
+        try await redis.set("Test", to: "hello").get()
+        let value = try await redis.get("Test").get()
+        XCTAssertEqual(value.string, "hello")
     }
 }

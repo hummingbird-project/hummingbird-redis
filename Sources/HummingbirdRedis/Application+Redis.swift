@@ -15,18 +15,26 @@
 import Hummingbird
 extension HBApplication {
     public var redis: RedisConnectionPoolGroup {
-        self.extensions.get(\.redis)
+        self.redisConnectionPools.default
+    }
+
+    public var redisConnectionPools: RedisConnectionPoolGroupArray {
+        self.extensions.get(\.redisConnectionPools, error: "To use Redis you need to set it up first. Please call HBApplication.addRedis()")
+    }
+
+    public func redis(_ id: RedisConnectionPoolGroupArray.Identifier) -> RedisConnectionPoolGroup? {
+        self.redisConnectionPools[id]
     }
 
     /// Add Redis to HBApplication
     /// - Parameter configuration: Redis configuration
     public func addRedis(configuration: HBRedisConfiguration) {
-        self.extensions.set(\.redis, value: .init(
+        self.extensions.set(\.redisConnectionPools, value: .init(
             configuration: configuration,
             eventLoopGroup: self.eventLoopGroup,
             logger: self.logger
-        )) { redis in
-            try redis.closePools().wait()
+        )) { redisConnectionPools in
+            try redisConnectionPools.closePools().wait()
         }
     }
 }
