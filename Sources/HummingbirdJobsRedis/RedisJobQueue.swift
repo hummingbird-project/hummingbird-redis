@@ -40,8 +40,17 @@ public final class HBRedisJobQueue: HBJobQueue {
 
     /// Initialize redis job queue
     /// - Parameters:
-    ///   - application: Application
-    ///   - configuration: Configuration
+    ///   - application: application to get redis setup from
+    ///   - configuration: configuration
+    public init(_ application: HBApplication, configuration: Configuration) {
+        self.redisConnectionPoolGroup = application.redis
+        self.configuration = configuration
+    }
+
+    /// Initialize redis job queue
+    /// - Parameters:
+    ///   - redisConnectionPoolGroup: Redis connection pool group
+    ///   - configuration: configuration
     public init(_ redisConnectionPoolGroup: RedisConnectionPoolGroup, configuration: Configuration) {
         self.redisConnectionPoolGroup = redisConnectionPoolGroup
         self.configuration = configuration

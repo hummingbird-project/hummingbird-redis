@@ -55,8 +55,8 @@ final class HummingbirdRedisTests: XCTestCase {
             try await request.redis(id: .test).set("Test", to: value).get()
             return .ok
         }
-        app.router.get("test") { request -> String? in
-            try await request.redis(id: .test).get("Test").get().string
+        app.router.get("test") { request in
+            request.redis(id: .test).get("Test").map(\.string)
         }
         try app.XCTStart()
         defer { app.XCTStop() }
