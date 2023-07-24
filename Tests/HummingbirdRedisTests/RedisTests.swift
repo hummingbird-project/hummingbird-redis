@@ -45,6 +45,32 @@ final class HummingbirdRedisTests: XCTestCase {
         }
     }
 
+    func testSecondRedis() async throws {
+        let app = HBApplication(testing: .live)
+        // add dummy default redis which connects to local web server (all we need is a live connection)
+        try app.addRedis(configuration: .init(hostname: "localhost", port: 8080))
+        try app.addRedis(id: .test, configuration: .init(hostname: Self.redisHostname, port: 6379))
+        app.router.put("test/:value") { request -> HTTPResponseStatus in
+            let value = try request.parameters.require("value")
+            try await request.redis(id: .test).set("Test", to: value).get()
+            return .ok
+        }
+        app.router.get("test") { request -> String? in
+            try await request.redis(id: .test).get("Test").get().string
+        }
+        try app.XCTStart()
+        defer { app.XCTStop() }
+
+        let tag = UUID().uuidString
+        try app.XCTExecute(uri: "/test/\(tag)", method: .PUT) { response in
+            XCTAssertEqual(response.status, .ok)
+        }
+        try app.XCTExecute(uri: "/test/", method: .GET) { response in
+            let body = try XCTUnwrap(response.body)
+            XCTAssertEqual(String(buffer: body), tag)
+        }
+    }
+
     func testRedisOutsideApplication() async throws {
         let app = HBApplication(testing: .live)
         try app.XCTStart()
@@ -60,5 +86,11 @@ final class HummingbirdRedisTests: XCTestCase {
         try await redis.set("Test", to: "hello").get()
         let value = try await redis.get("Test").get()
         XCTAssertEqual(value.string, "hello")
+    }
+}
+
+extension RedisConnectionPoolGroupArray.Identifier {
+    static var test: Self {
+        .init(id: "test")
     }
 }

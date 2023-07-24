@@ -22,19 +22,42 @@ extension HBApplication {
         self.extensions.get(\.redisConnectionPools, error: "To use Redis you need to set it up first. Please call HBApplication.addRedis()")
     }
 
-    public func redis(_ id: RedisConnectionPoolGroupArray.Identifier) -> RedisConnectionPoolGroup? {
+    public func redis(id: RedisConnectionPoolGroupArray.Identifier) -> RedisConnectionPoolGroup? {
         self.redisConnectionPools[id]
     }
 
     /// Add Redis to HBApplication
     /// - Parameter configuration: Redis configuration
     public func addRedis(configuration: HBRedisConfiguration) {
+        guard !self.extensions.exists(\.redisConnectionPools) else {
+            preconditionFailure("Redis has already been added to the application")
+        }
         self.extensions.set(\.redisConnectionPools, value: .init(
             configuration: configuration,
             eventLoopGroup: self.eventLoopGroup,
             logger: self.logger
         )) { redisConnectionPools in
             try redisConnectionPools.closePools().wait()
+        }
+    }
+
+    /// Add Redis to HBApplication
+    /// - Parameter configuration: Redis configuration
+    public func addRedis(id: RedisConnectionPoolGroupArray.Identifier, configuration: HBRedisConfiguration) {
+        if !self.extensions.exists(\.redisConnectionPools) {
+            self.extensions.set(\.redisConnectionPools, value: .init(
+                id: id,
+                configuration: configuration,
+                eventLoopGroup: self.eventLoopGroup,
+                logger: self.logger
+            )) { redisConnectionPools in
+                try redisConnectionPools.closePools().wait()
+            }
+        } else {
+            guard self.redisConnectionPools[id] == nil else {
+                preconditionFailure("Redis with id: '\(id)' has already been added to the application")
+            }
+            self.redisConnectionPools.addConnectionPool(id: id, configuration: configuration, logger: self.logger)
         }
     }
 }

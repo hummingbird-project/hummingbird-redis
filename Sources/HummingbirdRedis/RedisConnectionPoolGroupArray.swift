@@ -21,17 +21,17 @@ public final class RedisConnectionPoolGroupArray {
             self.id = id
         }
 
-        static var `default`: Identifier { .init(id: "default") }
+        internal static var `default`: Identifier { .init(id: "_hb_default_") }
     }
 
-    init(configuration: HBRedisConfiguration, eventLoopGroup: EventLoopGroup, logger: Logger) {
+    init(id: Identifier = .default, configuration: HBRedisConfiguration, eventLoopGroup: EventLoopGroup, logger: Logger) {
         let connectionPool = RedisConnectionPoolGroup(
             configuration: configuration,
             eventLoopGroup: eventLoopGroup,
             logger: logger
         )
         self.default = connectionPool
-        self.redisConnectionPools = [.default: connectionPool]
+        self.redisConnectionPools = [id: connectionPool]
     }
 
     public func addConnectionPool(id: Identifier, configuration: HBRedisConfiguration, logger: Logger) {
