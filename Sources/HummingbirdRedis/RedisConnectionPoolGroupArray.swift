@@ -14,17 +14,17 @@
 
 import NIOCore
 
-public final class RedisConnectionPoolGroupArray {
-    public struct Identifier: Hashable {
-        let id: String
-        init(id: String) {
-            self.id = id
-        }
-
-        internal static var `default`: Identifier { .init(id: "_hb_default_") }
+public struct RedisConnectionPoolGroupIdentifier: Hashable {
+    let id: String
+    public init(id: String) {
+        self.id = id
     }
 
-    init(id: Identifier = .default, configuration: HBRedisConfiguration, eventLoopGroup: EventLoopGroup, logger: Logger) {
+    internal static var `default`: Self { .init(id: "_hb_default_") }
+}
+
+public final class RedisConnectionPoolGroupArray {
+    init(id: RedisConnectionPoolGroupIdentifier = .default, configuration: HBRedisConfiguration, eventLoopGroup: EventLoopGroup, logger: Logger) {
         let connectionPool = RedisConnectionPoolGroup(
             configuration: configuration,
             eventLoopGroup: eventLoopGroup,
@@ -34,7 +34,7 @@ public final class RedisConnectionPoolGroupArray {
         self.redisConnectionPools = [id: connectionPool]
     }
 
-    public func addConnectionPool(id: Identifier, configuration: HBRedisConfiguration, logger: Logger) {
+    public func addConnectionPool(id: RedisConnectionPoolGroupIdentifier, configuration: HBRedisConfiguration, logger: Logger) {
         let connectionPool = RedisConnectionPoolGroup(
             configuration: configuration,
             eventLoopGroup: self.default.eventLoopGroup,
@@ -43,7 +43,7 @@ public final class RedisConnectionPoolGroupArray {
         self.redisConnectionPools[id] = connectionPool
     }
 
-    public subscript(_ id: Identifier) -> RedisConnectionPoolGroup? {
+    public subscript(_ id: RedisConnectionPoolGroupIdentifier) -> RedisConnectionPoolGroup? {
         return self.redisConnectionPools[id]
     }
 
@@ -53,5 +53,5 @@ public final class RedisConnectionPoolGroupArray {
     }
 
     public let `default`: RedisConnectionPoolGroup
-    var redisConnectionPools: [Identifier: RedisConnectionPoolGroup]
+    var redisConnectionPools: [RedisConnectionPoolGroupIdentifier: RedisConnectionPoolGroup]
 }

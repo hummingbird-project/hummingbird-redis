@@ -20,7 +20,7 @@ extension HBRequest {
         .init(eventLoop: self.eventLoop, logger: self.logger, connectionPoolGroup: self.application.redis)
     }
 
-    public func redis(id: RedisConnectionPoolGroupArray.Identifier) -> Redis {
+    public func redis(id: RedisConnectionPoolGroupIdentifier) -> Redis {
         guard let redisConnectionPoolGroup = self.application.redis(id: id) else {
             preconditionFailure("Redis Connection Pool Group id: '\(id)' does not exist")
         }

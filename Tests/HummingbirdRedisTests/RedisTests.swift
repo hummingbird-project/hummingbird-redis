@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Hummingbird
-@testable import HummingbirdRedis
+import HummingbirdRedis
 import HummingbirdXCT
 import NIOPosix
 import XCTest
@@ -89,7 +89,7 @@ final class HummingbirdRedisTests: XCTestCase {
     }
 }
 
-extension RedisConnectionPoolGroupArray.Identifier {
+extension RedisConnectionPoolGroupIdentifier {
     static var test: Self {
         .init(id: "test")
     }

@@ -153,7 +153,7 @@ public final class HBRedisJobQueue: HBJobQueue {
 }
 
 extension HBJobQueueFactory {
-    /// In memory driver for persist system
+    /// Redis Job queue driver
     public static func redis(
         configuration: HBRedisJobQueue.Configuration = .init()
     ) -> HBJobQueueFactory {
@@ -162,9 +162,9 @@ extension HBJobQueueFactory {
         }
     }
 
-    /// In memory driver for persist system
+    /// Redis Job queue drive
     public static func redis(
-        id: RedisConnectionPoolGroupArray.Identifier,
+        id: RedisConnectionPoolGroupIdentifier,
         configuration: HBRedisJobQueue.Configuration = .init()
     ) -> HBJobQueueFactory {
         .init { app in
