@@ -183,6 +183,34 @@ final class PersistTests: XCTestCase {
         }
     }
 
+    func testSecondRedis() throws {
+        let app = HBApplication(testing: .live)
+        // add dummy default redis which connects to local web server (all we need is a live connection)
+        try app.addRedis(configuration: .init(hostname: "localhost", port: 8080))
+        try app.addRedis(id: .test, configuration: .init(hostname: Self.redisHostname, port: 6379))
+        app.addPersist(using: .redis(id: .test))
+
+        app.router.put("/persist/:tag") { request -> HTTPResponseStatus in
+            let tag = try request.parameters.require("tag")
+            guard let buffer = request.body.buffer else { throw HBHTTPError(.badRequest) }
+            try await request.persist.set(key: tag, value: String(buffer: buffer))
+            return .ok
+        }
+        app.router.get("/persist/:tag") { request -> String? in
+            let tag = try request.parameters.require("tag")
+            return try await request.persist.get(key: tag, as: String.self)
+        }
+
+        try app.XCTStart()
+        defer { app.XCTStop() }
+        let tag = UUID().uuidString
+        try app.XCTExecute(uri: "/persist/\(tag)", method: .PUT, body: ByteBufferAllocator().buffer(string: "Persist")) { _ in }
+        try app.XCTExecute(uri: "/persist/\(tag)", method: .GET) { response in
+            let body = try XCTUnwrap(response.body)
+            XCTAssertEqual(String(buffer: body), "Persist")
+        }
+    }
+
     func testPersistOutsideApplication() async throws {
         let app = try createApplication()
 

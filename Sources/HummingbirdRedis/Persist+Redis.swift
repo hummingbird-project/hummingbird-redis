@@ -70,7 +70,7 @@ extension HBPersistDriverFactory {
     }
 
     /// Redis driver for persist system
-    public func redis(id: RedisConnectionPoolGroupIdentifier) -> HBPersistDriverFactory {
+    public static func redis(id: RedisConnectionPoolGroupIdentifier) -> HBPersistDriverFactory {
         .init { app in
             guard let redisConnectionPoolGroup = app.redisConnectionPools[id] else {
                 preconditionFailure("Redis Connection Pool Group id: \(id) does not exist")

@@ -14,8 +14,13 @@
 
 import NIOCore
 
-public struct RedisConnectionPoolGroupIdentifier: Hashable {
+public struct RedisConnectionPoolGroupIdentifier: Hashable, ExpressibleByStringLiteral {
     let id: String
+
+    public init(stringLiteral: String) {
+        self.id = stringLiteral
+    }
+
     public init(id: String) {
         self.id = id
     }
