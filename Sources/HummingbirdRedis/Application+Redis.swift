@@ -15,18 +15,49 @@
 import Hummingbird
 extension HBApplication {
     public var redis: RedisConnectionPoolGroup {
-        self.extensions.get(\.redis)
+        self.redisConnectionPools.default
+    }
+
+    public var redisConnectionPools: RedisConnectionPoolGroupArray {
+        self.extensions.get(\.redisConnectionPools, error: "To use Redis you need to set it up first. Please call HBApplication.addRedis()")
+    }
+
+    public func redis(id: RedisConnectionPoolGroupIdentifier) -> RedisConnectionPoolGroup? {
+        self.redisConnectionPools[id]
     }
 
     /// Add Redis to HBApplication
     /// - Parameter configuration: Redis configuration
     public func addRedis(configuration: HBRedisConfiguration) {
-        self.extensions.set(\.redis, value: .init(
+        guard !self.extensions.exists(\.redisConnectionPools) else {
+            preconditionFailure("Redis has already been added to the application")
+        }
+        self.extensions.set(\.redisConnectionPools, value: .init(
             configuration: configuration,
             eventLoopGroup: self.eventLoopGroup,
             logger: self.logger
-        )) { redis in
-            try redis.closePools().wait()
+        )) { redisConnectionPools in
+            try redisConnectionPools.closePools().wait()
+        }
+    }
+
+    /// Add Redis to HBApplication
+    /// - Parameter configuration: Redis configuration
+    public func addRedis(id: RedisConnectionPoolGroupIdentifier, configuration: HBRedisConfiguration) {
+        if !self.extensions.exists(\.redisConnectionPools) {
+            self.extensions.set(\.redisConnectionPools, value: .init(
+                id: id,
+                configuration: configuration,
+                eventLoopGroup: self.eventLoopGroup,
+                logger: self.logger
+            )) { redisConnectionPools in
+                try redisConnectionPools.closePools().wait()
+            }
+        } else {
+            guard self.redisConnectionPools[id] == nil else {
+                preconditionFailure("Redis with id: '\(id)' has already been added to the application")
+            }
+            self.redisConnectionPools.addConnectionPool(id: id, configuration: configuration, logger: self.logger)
         }
     }
 }

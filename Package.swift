@@ -11,7 +11,7 @@ let package = Package(
         .library(name: "HummingbirdJobsRedis", targets: ["HummingbirdJobsRedis"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "1.0.0"),
+        .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "1.6.0"),
         .package(url: "https://github.com/swift-server/RediStack.git", from: "1.4.0"),
     ],
     targets: [

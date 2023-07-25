@@ -19,7 +19,7 @@ import NIOCore
 import RediStack
 
 /// Redis implementation of job queues
-public class HBRedisJobQueue: HBJobQueue {
+public final class HBRedisJobQueue: HBJobQueue {
     public enum RedisQueueError: Error, CustomStringConvertible {
         case unexpectedRedisKeyType
         case jobMissing(JobIdentifier)
@@ -34,16 +34,25 @@ public class HBRedisJobQueue: HBJobQueue {
         }
     }
 
-    let application: HBApplication
+    let redisConnectionPoolGroup: RedisConnectionPoolGroup
     let configuration: Configuration
     public var pollTime: TimeAmount { self.configuration.pollTime }
 
     /// Initialize redis job queue
     /// - Parameters:
-    ///   - application: Application
-    ///   - configuration: Configuration
+    ///   - application: application to get redis setup from
+    ///   - configuration: configuration
     public init(_ application: HBApplication, configuration: Configuration) {
-        self.application = application
+        self.redisConnectionPoolGroup = application.redis
+        self.configuration = configuration
+    }
+
+    /// Initialize redis job queue
+    /// - Parameters:
+    ///   - redisConnectionPoolGroup: Redis connection pool group
+    ///   - configuration: configuration
+    public init(_ redisConnectionPoolGroup: RedisConnectionPoolGroup, configuration: Configuration) {
+        self.redisConnectionPoolGroup = redisConnectionPoolGroup
         self.configuration = configuration
     }
 
@@ -66,7 +75,7 @@ public class HBRedisJobQueue: HBJobQueue {
     ///   - eventLoop: eventLoop to do work on
     /// - Returns: Queued job
     public func push(_ job: HBJob, on eventLoop: EventLoop) -> EventLoopFuture<HBQueuedJob> {
-        let pool = self.application.redis.pool(for: eventLoop)
+        let pool = self.redisConnectionPoolGroup.pool(for: eventLoop)
         let queuedJob = HBQueuedJob(job)
         return self.set(jobId: queuedJob.id, job: queuedJob.job, pool: pool)
             .flatMap {
@@ -81,7 +90,7 @@ public class HBRedisJobQueue: HBJobQueue {
     /// - Parameter eventLoop: eventLoop to do work on
     /// - Returns: queued job
     public func pop(on eventLoop: EventLoop) -> EventLoopFuture<HBQueuedJob?> {
-        let pool = self.application.redis.pool(for: eventLoop)
+        let pool = self.redisConnectionPoolGroup.pool(for: eventLoop)
         return pool.rpoplpush(from: self.configuration.queueKey, to: self.configuration.processingQueueKey)
             .flatMap { key -> EventLoopFuture<HBQueuedJob?> in
                 if key.isNull {
@@ -106,7 +115,7 @@ public class HBRedisJobQueue: HBJobQueue {
     ///   - jobId: Job id
     ///   - eventLoop: eventLoop to do work on
     public func finished(jobId: JobIdentifier, on eventLoop: EventLoop) -> EventLoopFuture<Void> {
-        let pool = self.application.redis.pool(for: eventLoop)
+        let pool = self.redisConnectionPoolGroup.pool(for: eventLoop)
         return pool.lrem(jobId.description, from: self.configuration.processingQueueKey, count: 0)
             .flatMap { _ in
                 return self.delete(jobId: jobId, pool: pool)
@@ -119,7 +128,7 @@ public class HBRedisJobQueue: HBJobQueue {
     /// last time queues were processed so needs to be re run
     public func rerunProcessing(on eventLoop: EventLoop) -> EventLoopFuture<Void> {
         let promise = eventLoop.makePromise(of: Void.self)
-        let pool = self.application.redis.pool(for: eventLoop)
+        let pool = self.redisConnectionPoolGroup.pool(for: eventLoop)
         func _moveOneEntry() {
             pool.rpoplpush(from: self.configuration.processingQueueKey, to: self.configuration.queueKey)
                 .whenComplete { result in
@@ -153,9 +162,26 @@ public class HBRedisJobQueue: HBJobQueue {
 }
 
 extension HBJobQueueFactory {
-    /// In memory driver for persist system
-    public static func redis(configuration: HBRedisJobQueue.Configuration = .init()) -> HBJobQueueFactory {
-        .init(create: { app in HBRedisJobQueue(app, configuration: configuration) })
+    /// Redis Job queue driver
+    public static func redis(
+        configuration: HBRedisJobQueue.Configuration = .init()
+    ) -> HBJobQueueFactory {
+        .init { app in
+            return HBRedisJobQueue(app.redis, configuration: configuration)
+        }
+    }
+
+    /// Redis Job queue drive
+    public static func redis(
+        id: RedisConnectionPoolGroupIdentifier,
+        configuration: HBRedisJobQueue.Configuration = .init()
+    ) -> HBJobQueueFactory {
+        .init { app in
+            guard let connectionPool = app.redisConnectionPools[id] else {
+                preconditionFailure("Redis Connection Pool Group id: \(id) does not exist")
+            }
+            return HBRedisJobQueue(connectionPool, configuration: configuration)
+        }
     }
 }
 

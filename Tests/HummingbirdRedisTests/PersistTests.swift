@@ -182,4 +182,61 @@ final class PersistTests: XCTestCase {
             XCTAssertEqual(String(buffer: body), "ThisIsTest1")
         }
     }
+
+    func testSecondRedis() throws {
+        let app = HBApplication(testing: .live)
+        // add dummy default redis which connects to local web server (all we need is a live connection)
+        try app.addRedis(configuration: .init(hostname: "localhost", port: 8080))
+        try app.addRedis(id: .test, configuration: .init(hostname: Self.redisHostname, port: 6379))
+        app.addPersist(using: .redis(id: .test))
+
+        app.router.put("/persist/:tag") { request -> HTTPResponseStatus in
+            let tag = try request.parameters.require("tag")
+            guard let buffer = request.body.buffer else { throw HBHTTPError(.badRequest) }
+            try await request.persist.set(key: tag, value: String(buffer: buffer))
+            return .ok
+        }
+        app.router.get("/persist/:tag") { request -> String? in
+            let tag = try request.parameters.require("tag")
+            return try await request.persist.get(key: tag, as: String.self)
+        }
+
+        try app.XCTStart()
+        defer { app.XCTStop() }
+        let tag = UUID().uuidString
+        try app.XCTExecute(uri: "/persist/\(tag)", method: .PUT, body: ByteBufferAllocator().buffer(string: "Persist")) { _ in }
+        try app.XCTExecute(uri: "/persist/\(tag)", method: .GET) { response in
+            let body = try XCTUnwrap(response.body)
+            XCTAssertEqual(String(buffer: body), "Persist")
+        }
+    }
+
+    func testPersistOutsideApplication() async throws {
+        let app = try createApplication()
+
+        let redisConnectionPoolGroup = try RedisConnectionPoolGroup(
+            configuration: .init(hostname: Self.redisHostname, port: 6379),
+            eventLoopGroup: app.eventLoopGroup,
+            logger: app.logger
+        )
+        let persist = HBRedisPersistDriver(redisConnectionPoolGroup: redisConnectionPoolGroup)
+
+        app.router.put("test/:value") { request -> HTTPResponseStatus in
+            let value = try request.parameters.require("value")
+            try await persist.set(key: "test", value: value, expires: nil, request: request).get()
+            return .ok
+        }
+        app.router.get("test") { request -> String? in
+            try await persist.get(key: "test", as: String.self, request: request).get()
+        }
+        try app.XCTStart()
+        defer { app.XCTStop() }
+
+        let tag = UUID().uuidString
+        try app.XCTExecute(uri: "/test/\(tag)", method: .PUT) { _ in }
+        try app.XCTExecute(uri: "/test/", method: .GET) { response in
+            let body = try XCTUnwrap(response.body)
+            XCTAssertEqual(String(buffer: body), tag)
+        }
+    }
 }

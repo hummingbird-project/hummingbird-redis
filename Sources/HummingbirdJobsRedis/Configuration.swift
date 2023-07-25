@@ -17,7 +17,7 @@ import RediStack
 
 extension HBRedisJobQueue {
     /// Redis Job queue configuration
-    public struct Configuration {
+    public struct Configuration: Sendable {
         let queueKey: RedisKey
         let processingQueueKey: RedisKey
         let rerunProcessing: Bool
@@ -35,3 +35,5 @@ extension HBRedisJobQueue {
         }
     }
 }
+
+extension RedisKey: @unchecked Sendable {}

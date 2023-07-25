@@ -338,6 +338,54 @@ final class HummingbirdRedisJobsTests: XCTestCase {
 
         XCTAssertTrue(TestJob.finished)
     }
+
+    func testSecondRedis() throws {
+        struct TestJob: HBJob {
+            static let name = "testBasic"
+            static let expectation = XCTestExpectation(description: "Jobs Completed")
+
+            let value: Int
+            func execute(on eventLoop: EventLoop, logger: Logger) -> EventLoopFuture<Void> {
+                print(self.value)
+                return eventLoop.scheduleTask(in: .milliseconds(Int64.random(in: 10..<50))) {
+                    Self.expectation.fulfill()
+                }.futureResult
+            }
+        }
+        HBJobRegister.register(job: TestJob.self)
+        TestJob.expectation.expectedFulfillmentCount = 10
+        TestJob.register()
+
+        let app = HBApplication(testing: .live)
+        // add dummy default redis which connects to local web server (all we need is a live connection)
+        try app.addRedis(configuration: .init(hostname: "localhost", port: 8080))
+        try app.addRedis(
+            id: "jobsTest",
+            configuration: .init(
+                hostname: Self.redisHostname,
+                port: 6379,
+                pool: .init(connectionRetryTimeout: .seconds(1))
+            )
+        )
+        app.logger.logLevel = .trace
+        app.addJobs(using: .redis(id: "jobsTest", configuration: .init(queueKey: "testBasic")), numWorkers: 1)
+
+        try app.start()
+        defer { app.stop() }
+
+        app.jobs.queue.enqueue(TestJob(value: 1), on: app.eventLoopGroup.next())
+        app.jobs.queue.enqueue(TestJob(value: 2), on: app.eventLoopGroup.next())
+        app.jobs.queue.enqueue(TestJob(value: 3), on: app.eventLoopGroup.next())
+        app.jobs.queue.enqueue(TestJob(value: 4), on: app.eventLoopGroup.next())
+        app.jobs.queue.enqueue(TestJob(value: 5), on: app.eventLoopGroup.next())
+        app.jobs.queue.enqueue(TestJob(value: 6), on: app.eventLoopGroup.next())
+        app.jobs.queue.enqueue(TestJob(value: 7), on: app.eventLoopGroup.next())
+        app.jobs.queue.enqueue(TestJob(value: 8), on: app.eventLoopGroup.next())
+        app.jobs.queue.enqueue(TestJob(value: 9), on: app.eventLoopGroup.next())
+        app.jobs.queue.enqueue(TestJob(value: 0), on: app.eventLoopGroup.next())
+
+        wait(for: [TestJob.expectation], timeout: 5)
+    }
 }
 
 extension HBJobQueueId {

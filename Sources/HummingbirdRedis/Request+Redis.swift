@@ -17,29 +17,34 @@ import RediStack
 
 extension HBRequest {
     public var redis: Redis {
-        .init(request: self)
+        .init(eventLoop: self.eventLoop, logger: self.logger, connectionPoolGroup: self.application.redis)
+    }
+
+    public func redis(id: RedisConnectionPoolGroupIdentifier) -> Redis {
+        guard let redisConnectionPoolGroup = self.application.redis(id: id) else {
+            preconditionFailure("Redis Connection Pool Group id: '\(id)' does not exist")
+        }
+        return .init(eventLoop: self.eventLoop, logger: self.logger, connectionPoolGroup: redisConnectionPoolGroup)
     }
 
     public struct Redis {
-        let request: HBRequest
+        public let eventLoop: EventLoop
+        let logger: Logger
+        let connectionPoolGroup: RedisConnectionPoolGroup
     }
 }
 
 extension HBRequest.Redis: RedisClient {
-    public var eventLoop: EventLoop {
-        self.request.eventLoop
-    }
-
     public func logging(to logger: Logger) -> RedisClient {
-        self.request.application.redis
+        self.connectionPoolGroup
             .pool(for: self.eventLoop)
             .logging(to: logger)
     }
 
     public func send(command: String, with arguments: [RESPValue]) -> EventLoopFuture<RESPValue> {
-        self.request.application.redis
+        self.connectionPoolGroup
             .pool(for: self.eventLoop)
-            .logging(to: self.request.logger)
+            .logging(to: self.logger)
             .send(command: command, with: arguments)
     }
 
@@ -49,16 +54,16 @@ extension HBRequest.Redis: RedisClient {
         onSubscribe subscribeHandler: RedisSubscriptionChangeHandler?,
         onUnsubscribe unsubscribeHandler: RedisSubscriptionChangeHandler?
     ) -> EventLoopFuture<Void> {
-        return self.request.application.redis
+        return self.connectionPoolGroup
             .pubsubClient
-            .logging(to: self.request.logger)
+            .logging(to: self.logger)
             .subscribe(to: channels, messageReceiver: receiver, onSubscribe: subscribeHandler, onUnsubscribe: unsubscribeHandler)
     }
 
     public func unsubscribe(from channels: [RedisChannelName]) -> EventLoopFuture<Void> {
-        return self.request.application.redis
+        return self.connectionPoolGroup
             .pubsubClient
-            .logging(to: self.request.logger)
+            .logging(to: self.logger)
             .unsubscribe(from: channels)
     }
 
@@ -68,16 +73,16 @@ extension HBRequest.Redis: RedisClient {
         onSubscribe subscribeHandler: RedisSubscriptionChangeHandler?,
         onUnsubscribe unsubscribeHandler: RedisSubscriptionChangeHandler?
     ) -> EventLoopFuture<Void> {
-        return self.request.application.redis
+        return self.connectionPoolGroup
             .pubsubClient
-            .logging(to: self.request.logger)
+            .logging(to: self.logger)
             .psubscribe(to: patterns, messageReceiver: receiver, onSubscribe: subscribeHandler, onUnsubscribe: unsubscribeHandler)
     }
 
     public func punsubscribe(from patterns: [String]) -> EventLoopFuture<Void> {
-        return self.request.application.redis
+        return self.connectionPoolGroup
             .pubsubClient
-            .logging(to: self.request.logger)
+            .logging(to: self.logger)
             .punsubscribe(from: patterns)
     }
 }
