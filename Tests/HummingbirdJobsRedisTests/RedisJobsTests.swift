@@ -13,8 +13,9 @@
 //===----------------------------------------------------------------------===//
 
 import Hummingbird
-@testable import HummingbirdJobs
-@testable import HummingbirdJobsRedis
+import HummingbirdJobs
+import HummingbirdJobsRedis
+import HummingbirdRedis
 import HummingbirdXCT
 import XCTest
 
@@ -35,7 +36,6 @@ final class HummingbirdRedisJobsTests: XCTestCase {
                 }.futureResult
             }
         }
-        HBJobRegister.register(job: TestJob.self)
         TestJob.expectation.expectedFulfillmentCount = 10
         TestJob.register()
 
@@ -80,8 +80,8 @@ final class HummingbirdRedisJobsTests: XCTestCase {
                 }.futureResult
             }
         }
-        HBJobRegister.register(job: TestJob.self)
         TestJob.expectation.expectedFulfillmentCount = 10
+        TestJob.register()
 
         let app = HBApplication(testing: .live)
         try app.addRedis(
@@ -125,7 +125,6 @@ final class HummingbirdRedisJobsTests: XCTestCase {
                 }.futureResult
             }
         }
-        HBJobRegister.register(job: TestJob.self)
         TestJob.expectation.expectedFulfillmentCount = 10
         TestJob.register()
 
@@ -352,7 +351,6 @@ final class HummingbirdRedisJobsTests: XCTestCase {
                 }.futureResult
             }
         }
-        HBJobRegister.register(job: TestJob.self)
         TestJob.expectation.expectedFulfillmentCount = 10
         TestJob.register()
 
@@ -383,6 +381,55 @@ final class HummingbirdRedisJobsTests: XCTestCase {
         app.jobs.queue.enqueue(TestJob(value: 8), on: app.eventLoopGroup.next())
         app.jobs.queue.enqueue(TestJob(value: 9), on: app.eventLoopGroup.next())
         app.jobs.queue.enqueue(TestJob(value: 0), on: app.eventLoopGroup.next())
+
+        wait(for: [TestJob.expectation], timeout: 5)
+    }
+
+    func testRedisQueueOutsideApp() throws {
+        struct TestJob: HBJob {
+            static let name = "testRedisOutsideApp"
+            static let expectation = XCTestExpectation(description: "Jobs Completed")
+
+            let value: Int
+            func execute(on eventLoop: EventLoop, logger: Logger) -> EventLoopFuture<Void> {
+                print(self.value)
+                return eventLoop.scheduleTask(in: .milliseconds(Int64.random(in: 10..<50))) {
+                    Self.expectation.fulfill()
+                }.futureResult
+            }
+        }
+        TestJob.expectation.expectedFulfillmentCount = 5
+        TestJob.register()
+
+        let app = HBApplication(testing: .live)
+        app.logger.logLevel = .trace
+
+        let redisConnectionPoolGroup = try RedisConnectionPoolGroup(
+            configuration: .init(hostname: Self.redisHostname, port: 6379),
+            eventLoopGroup: app.eventLoopGroup,
+            logger: app.logger
+        )
+        let redisJobQueue = HBRedisJobQueue(
+            redisConnectionPoolGroup,
+            configuration: .init(queueKey: "testBasic")
+        )
+        let jobQueueHandler = HBJobQueueHandler(
+            queue: redisJobQueue,
+            numWorkers: 1,
+            eventLoopGroup: app.eventLoopGroup,
+            logger: app.logger
+        )
+        defer {
+            try? jobQueueHandler.shutdown().wait()
+            try? redisConnectionPoolGroup.shutdown().wait()
+        }
+        jobQueueHandler.start()
+
+        jobQueueHandler.enqueue(TestJob(value: 1), on: app.eventLoopGroup.next())
+        jobQueueHandler.enqueue(TestJob(value: 2), on: app.eventLoopGroup.next())
+        jobQueueHandler.enqueue(TestJob(value: 3), on: app.eventLoopGroup.next())
+        jobQueueHandler.enqueue(TestJob(value: 4), on: app.eventLoopGroup.next())
+        jobQueueHandler.enqueue(TestJob(value: 5), on: app.eventLoopGroup.next())
 
         wait(for: [TestJob.expectation], timeout: 5)
     }

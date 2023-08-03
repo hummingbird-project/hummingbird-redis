@@ -38,6 +38,11 @@ public struct RedisConnectionPoolGroup {
         self.eventLoopGroup = eventLoopGroup
     }
 
+    /// Shutdown connection pool group
+    public func shutdown() -> EventLoopFuture<Void> {
+        self.closePools()
+    }
+
     /// Get connection pool for EventLoop
     /// - Parameter eventLoop: eventLoop
     /// - Returns: connection pool

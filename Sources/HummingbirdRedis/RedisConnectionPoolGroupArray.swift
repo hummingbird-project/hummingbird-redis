@@ -39,6 +39,11 @@ public final class RedisConnectionPoolGroupArray {
         self.redisConnectionPools = [id: connectionPool]
     }
 
+    /// Shutdown connection pool group
+    func shutdown() -> EventLoopFuture<Void> {
+        self.closePools()
+    }
+
     public func addConnectionPool(id: RedisConnectionPoolGroupIdentifier, configuration: HBRedisConfiguration, logger: Logger) {
         let connectionPool = RedisConnectionPoolGroup(
             configuration: configuration,
