@@ -73,14 +73,18 @@ final class HummingbirdRedisTests: XCTestCase {
 
     func testRedisOutsideApplication() async throws {
         let app = HBApplication(testing: .live)
-        try app.XCTStart()
-        defer { app.XCTStop() }
 
         let redisConnectionPoolGroup = try RedisConnectionPoolGroup(
             configuration: .init(hostname: Self.redisHostname, port: 6379),
             eventLoopGroup: app.eventLoopGroup,
             logger: app.logger
         )
+        try app.XCTStart()
+        defer { 
+            
+            app.XCTStop() 
+        }
+
         let eventLoop = app.eventLoopGroup.any()
         let redis = redisConnectionPoolGroup.pool(for: eventLoop)
         try await redis.set("Test", to: "hello").get()

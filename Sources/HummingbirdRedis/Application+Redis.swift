@@ -51,7 +51,7 @@ extension HBApplication {
                 eventLoopGroup: self.eventLoopGroup,
                 logger: self.logger
             )) { redisConnectionPools in
-                try redisConnectionPools.closePools().wait()
+                try redisConnectionPools.shutdown().wait()
             }
         } else {
             guard self.redisConnectionPools[id] == nil else {
