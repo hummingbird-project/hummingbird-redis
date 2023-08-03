@@ -80,9 +80,8 @@ final class HummingbirdRedisTests: XCTestCase {
             logger: app.logger
         )
         try app.XCTStart()
-        defer { 
-            
-            app.XCTStop() 
+        defer {
+            app.XCTStop()
         }
 
         let eventLoop = app.eventLoopGroup.any()

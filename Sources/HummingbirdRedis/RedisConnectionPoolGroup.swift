@@ -40,7 +40,7 @@ public struct RedisConnectionPoolGroup {
 
     /// Shutdown connection pool group
     public func shutdown() -> EventLoopFuture<Void> {
-        closePools()
+        self.closePools()
     }
 
     /// Get connection pool for EventLoop
