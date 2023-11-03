@@ -1,17 +1,17 @@
-// swift-tools-version:5.5
+// swift-tools-version:5.7
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
 
 let package = Package(
     name: "hummingbird-redis",
-    platforms: [.iOS(.v12), .tvOS(.v12)],
+    platforms: [.macOS(.v13), .iOS(.v16), .tvOS(.v16)],
     products: [
         .library(name: "HummingbirdRedis", targets: ["HummingbirdRedis"]),
         .library(name: "HummingbirdJobsRedis", targets: ["HummingbirdJobsRedis"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "1.6.0"),
+        .package(url: "https://github.com/hummingbird-project/hummingbird.git", branch: "2.x.x"),
         .package(url: "https://github.com/swift-server/RediStack.git", from: "1.4.0"),
     ],
     targets: [
