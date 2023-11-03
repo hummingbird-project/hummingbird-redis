@@ -12,429 +12,278 @@
 //
 //===----------------------------------------------------------------------===//
 
+import Atomics
 import Hummingbird
 import HummingbirdJobs
-import HummingbirdJobsRedis
+@testable import HummingbirdJobsRedis
 import HummingbirdRedis
 import HummingbirdXCT
+import RediStack
+import ServiceLifecycle
 import XCTest
 
 final class HummingbirdRedisJobsTests: XCTestCase {
     static let env = HBEnvironment()
     static let redisHostname = env.get("REDIS_HOSTNAME") ?? "localhost"
 
-    func testBasic() throws {
-        struct TestJob: HBJob {
-            static let name = "testBasic"
-            static let expectation = XCTestExpectation(description: "Jobs Completed")
-
-            let value: Int
-            func execute(on eventLoop: EventLoop, logger: Logger) -> EventLoopFuture<Void> {
-                print(self.value)
-                return eventLoop.scheduleTask(in: .milliseconds(Int64.random(in: 10..<50))) {
-                    Self.expectation.fulfill()
-                }.futureResult
-            }
+    /// Helper function for test a server
+    ///
+    /// Creates test client, runs test function abd ensures everything is
+    /// shutdown correctly
+    @discardableResult public func testJobQueue<T>(
+        redis: RedisConnectionPoolService? = nil,
+        numWorkers: Int,
+        failedJobsInitialization: HBRedisJobQueue.JobInitialization = .remove,
+        test: (HBRedisJobQueue) async throws -> T
+    ) async throws -> T {
+        let redisService: RedisConnectionPoolService
+        var additionalServices: [any Service] = []
+        if let redis = redis {
+            redisService = redis
+        } else {
+            let redisConnectionPool = try RedisConnectionPool(
+                .init(hostname: Self.redisHostname, port: 6379),
+                logger: Logger(label: "Redis")
+            )
+            redisService = RedisConnectionPoolService(pool: redisConnectionPool)
+            additionalServices = [redisService]
         }
-        TestJob.expectation.expectedFulfillmentCount = 10
-        TestJob.register()
-
-        let app = HBApplication(testing: .live)
-        try app.addRedis(
+        let redisJobQueue = HBRedisJobQueue(
+            redisService,
             configuration: .init(
-                hostname: Self.redisHostname,
-                port: 6379,
-                pool: .init(connectionRetryTimeout: .seconds(1))
+                pendingJobInitialization: .remove,
+                processingJobsInitialization: .remove,
+                failedJobsInitialization: failedJobsInitialization
             )
         )
-        app.logger.logLevel = .trace
-        app.addJobs(using: .redis(configuration: .init(queueKey: "testBasic")), numWorkers: 1)
+        var logger = Logger(label: "HummingbirdJobsTests")
+        logger.logLevel = .trace
+        let jobQueueHandler = HBJobQueueHandler(
+            queue: redisJobQueue,
+            numWorkers: numWorkers,
+            logger: logger
+        )
 
-        try app.start()
-        defer { app.stop() }
-
-        app.jobs.queue.enqueue(TestJob(value: 1), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 2), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 3), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 4), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 5), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 6), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 7), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 8), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 9), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 0), on: app.eventLoopGroup.next())
-
-        wait(for: [TestJob.expectation], timeout: 5)
+        return try await withThrowingTaskGroup(of: Void.self) { group in
+            let serviceGroup = ServiceGroup(
+                configuration: .init(
+                    services: [jobQueueHandler] + additionalServices,
+                    gracefulShutdownSignals: [.sigterm, .sigint],
+                    logger: Logger(label: "JobQueueService")
+                )
+            )
+            group.addTask {
+                try await serviceGroup.run()
+            }
+            let value = try await test(redisJobQueue)
+            await serviceGroup.triggerGracefulShutdown()
+            return value
+        }
     }
 
-    func testMultipleWorkers() throws {
+    func testBasic() async throws {
+        struct TestJob: HBJob {
+            static let name = "testBasic"
+            static let expectation = AsyncExpectation(10)
+
+            let value: Int
+            func execute(logger: Logger) async throws {
+                print(self.value)
+                try await Task.sleep(for: .milliseconds(Int.random(in: 10..<50)))
+                await Self.expectation.fulfill()
+            }
+        }
+        TestJob.register()
+        try await self.testJobQueue(numWorkers: 1) { jobQueue in
+            try await jobQueue.push(TestJob(value: 1))
+            try await jobQueue.push(TestJob(value: 2))
+            try await jobQueue.push(TestJob(value: 3))
+            try await jobQueue.push(TestJob(value: 4))
+            try await jobQueue.push(TestJob(value: 5))
+            try await jobQueue.push(TestJob(value: 6))
+            try await jobQueue.push(TestJob(value: 7))
+            try await jobQueue.push(TestJob(value: 8))
+            try await jobQueue.push(TestJob(value: 9))
+            try await jobQueue.push(TestJob(value: 10))
+
+            try await withTimeout(timeout: .seconds(10)) { try await TestJob.expectation.wait() }
+
+            let pendingJobs = try await jobQueue.redisConnectionPool.llen(of: jobQueue.configuration.queueKey).get()
+            XCTAssertEqual(pendingJobs, 0)
+        }
+    }
+
+    func testMultipleWorkers() async throws {
         struct TestJob: HBJob {
             static let name = "testMultipleWorkers"
-            static let expectation = XCTestExpectation(description: "Jobs Completed")
+            static let runningJobCounter = ManagedAtomic(0)
+            static let maxRunningJobCounter = ManagedAtomic(0)
+            static let expectation = AsyncExpectation(10)
 
             let value: Int
-            func execute(on eventLoop: EventLoop, logger: Logger) -> EventLoopFuture<Void> {
+            func execute(logger: Logger) async throws {
+                let runningJobs = Self.runningJobCounter.wrappingIncrementThenLoad(by: 1, ordering: .relaxed)
+                if runningJobs > Self.maxRunningJobCounter.load(ordering: .relaxed) {
+                    Self.maxRunningJobCounter.store(runningJobs, ordering: .relaxed)
+                }
+                try await Task.sleep(for: .milliseconds(Int.random(in: 10..<100)))
                 print(self.value)
-                return eventLoop.scheduleTask(in: .milliseconds(Int64.random(in: 10..<50))) {
-                    Self.expectation.fulfill()
-                }.futureResult
+                await Self.expectation.fulfill()
+                Self.runningJobCounter.wrappingDecrement(by: 1, ordering: .relaxed)
             }
         }
-        TestJob.expectation.expectedFulfillmentCount = 10
         TestJob.register()
 
-        let app = HBApplication(testing: .live)
-        try app.addRedis(
-            configuration: .init(
-                hostname: Self.redisHostname,
-                port: 6379,
-                pool: .init(connectionRetryTimeout: .seconds(1))
-            )
-        )
-        app.logger.logLevel = .trace
-        app.addJobs(using: .redis(configuration: .init(queueKey: "testMultipleWorkers")), numWorkers: 4)
-        TestJob.register()
+        try await self.testJobQueue(numWorkers: 4) { jobQueue in
+            try await jobQueue.push(TestJob(value: 1))
+            try await jobQueue.push(TestJob(value: 2))
+            try await jobQueue.push(TestJob(value: 3))
+            try await jobQueue.push(TestJob(value: 4))
+            try await jobQueue.push(TestJob(value: 5))
+            try await jobQueue.push(TestJob(value: 6))
+            try await jobQueue.push(TestJob(value: 7))
+            try await jobQueue.push(TestJob(value: 8))
+            try await jobQueue.push(TestJob(value: 9))
+            try await jobQueue.push(TestJob(value: 10))
 
-        try app.start()
-        defer { app.stop() }
+            try await withTimeout(timeout: .seconds(5)) { try await TestJob.expectation.wait() }
 
-        app.jobs.queue.enqueue(TestJob(value: 1), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 2), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 3), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 4), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 5), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 6), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 7), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 8), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 9), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 0), on: app.eventLoopGroup.next())
+            XCTAssertGreaterThan(TestJob.maxRunningJobCounter.load(ordering: .relaxed), 1)
+            XCTAssertLessThanOrEqual(TestJob.maxRunningJobCounter.load(ordering: .relaxed), 4)
 
-        wait(for: [TestJob.expectation], timeout: 5)
-    }
-
-    func testIntermitantEnqueue() throws {
-        struct TestJob: HBJob {
-            static let name = "testBasic"
-            static let expectation = XCTestExpectation(description: "Jobs Completed")
-
-            let value: Int
-            func execute(on eventLoop: EventLoop, logger: Logger) -> EventLoopFuture<Void> {
-                print(self.value)
-                return eventLoop.scheduleTask(in: .milliseconds(Int64.random(in: 10..<50))) {
-                    Self.expectation.fulfill()
-                }.futureResult
-            }
+            let pendingJobs = try await jobQueue.redisConnectionPool.llen(of: jobQueue.configuration.queueKey).get()
+            XCTAssertEqual(pendingJobs, 0)
         }
-        TestJob.expectation.expectedFulfillmentCount = 10
-        TestJob.register()
-
-        let app = HBApplication(testing: .live)
-        try app.addRedis(
-            configuration: .init(
-                hostname: Self.redisHostname,
-                port: 6379,
-                pool: .init(connectionRetryTimeout: .seconds(1))
-            )
-        )
-        app.logger.logLevel = .trace
-        app.addJobs(using: .redis(configuration: .init(queueKey: "testBasic")), numWorkers: 1)
-
-        try app.start()
-        defer { app.stop() }
-
-        app.jobs.queue.enqueue(TestJob(value: 1), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 2), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 3), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 4), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 5), on: app.eventLoopGroup.next())
-        // stall to ensure previous jobs have resolve and workers are waiting
-        Thread.sleep(forTimeInterval: 0.5)
-        app.jobs.queue.enqueue(TestJob(value: 6), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 7), on: app.eventLoopGroup.next())
-        // stall to ensure previous jobs have resolve and workers are waiting
-        Thread.sleep(forTimeInterval: 0.5)
-        app.jobs.queue.enqueue(TestJob(value: 8), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 9), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 0), on: app.eventLoopGroup.next())
-
-        wait(for: [TestJob.expectation], timeout: 5)
     }
 
-    func testErrorRetryCount() throws {
+    func testErrorRetryCount() async throws {
         struct FailedError: Error {}
 
         struct TestJob: HBJob {
             static let name = "testErrorRetryCount"
             static let maxRetryCount = 3
-            static let expectation = XCTestExpectation(description: "Jobs Completed")
-            func execute(on eventLoop: EventLoop, logger: Logger) -> EventLoopFuture<Void> {
-                Self.expectation.fulfill()
-                return eventLoop.makeFailedFuture(FailedError())
+            static let expectation = AsyncExpectation(4)
+            func execute(logger: Logger) async throws {
+                await Self.expectation.fulfill()
+                throw FailedError()
             }
         }
-        TestJob.expectation.expectedFulfillmentCount = 4
         TestJob.register()
 
-        let app = HBApplication(testing: .live)
-        try app.addRedis(
-            configuration: .init(
-                hostname: Self.redisHostname,
-                port: 6379,
-                pool: .init(connectionRetryTimeout: .seconds(1))
-            )
-        )
-        app.logger.logLevel = .trace
-        app.addJobs(using: .redis(configuration: .init(queueKey: "testErrorRetryCount")), numWorkers: 1)
+        try await self.testJobQueue(numWorkers: 4) { jobQueue in
+            try await jobQueue.push(TestJob())
 
-        try app.start()
-        defer { app.stop() }
+            try await withTimeout(timeout: .seconds(5)) { try await TestJob.expectation.wait() }
+            try await Task.sleep(for: .milliseconds(200))
 
-        app.jobs.queue.enqueue(TestJob(), on: app.eventLoopGroup.next())
+            let failedJobs = try await jobQueue.redisConnectionPool.llen(of: jobQueue.configuration.failedQueueKey).get()
+            XCTAssertEqual(failedJobs, 1)
 
-        wait(for: [TestJob.expectation], timeout: 1)
+            let pendingJobs = try await jobQueue.redisConnectionPool.llen(of: jobQueue.configuration.queueKey).get()
+            XCTAssertEqual(pendingJobs, 0)
+        }
     }
 
-    func testSecondQueue() throws {
+    /// Test job is cancelled on shutdown
+    func testShutdownJob() async throws {
         struct TestJob: HBJob {
-            static let name = "testSecondQueue"
-            static let expectation = XCTestExpectation(description: "Jobs Completed")
-            func execute(on eventLoop: EventLoop, logger: Logger) -> EventLoopFuture<Void> {
-                Self.expectation.fulfill()
-                return eventLoop.makeSucceededVoidFuture()
-            }
-        }
-        TestJob.expectation.expectedFulfillmentCount = 1
-        TestJob.register()
-
-        let app = HBApplication(testing: .live)
-        try app.addRedis(
-            configuration: .init(
-                hostname: Self.redisHostname,
-                port: 6379,
-                pool: .init(connectionRetryTimeout: .seconds(1))
-            )
-        )
-        app.logger.logLevel = .trace
-        app.addJobs(using: .memory, numWorkers: 1)
-        app.jobs.registerQueue(.redisTest, queue: .redis(configuration: .init(queueKey: "testSecondQueue")), numWorkers: 1)
-
-        try app.start()
-        defer { app.stop() }
-
-        app.jobs.queues(.redisTest).enqueue(TestJob(), on: app.eventLoopGroup.next())
-
-        wait(for: [TestJob.expectation], timeout: 1)
-    }
-
-    func testShutdown() throws {
-        let app = HBApplication(testing: .live)
-        try app.addRedis(
-            configuration: .init(
-                hostname: Self.redisHostname,
-                port: 6379,
-                pool: .init(connectionRetryTimeout: .seconds(1))
-            )
-        )
-        app.logger.logLevel = .trace
-        app.addJobs(using: .redis(configuration: .init(queueKey: "testBasic")), numWorkers: 1)
-        try app.start()
-        app.stop()
-        app.wait()
-    }
-
-    func testShutdownJob() throws {
-        class TestJob: HBJob {
             static let name = "testShutdownJob"
-            static var started: Bool = false
-            static var finished: Bool = false
-            func execute(on eventLoop: EventLoop, logger: Logger) -> EventLoopFuture<Void> {
-                Self.started = true
-                let job = eventLoop.scheduleTask(in: .milliseconds(500)) {
-                    Self.finished = true
-                }
-                return job.futureResult
+            func execute(logger: Logger) async throws {
+                try await Task.sleep(for: .milliseconds(100))
             }
         }
         TestJob.register()
 
-        let app = HBApplication(testing: .live)
-        try app.addRedis(
-            configuration: .init(
-                hostname: Self.redisHostname,
-                port: 6379,
-                pool: .init(connectionRetryTimeout: .seconds(1))
-            )
+        let redisConnectionPool = try RedisConnectionPool(
+            .init(hostname: Self.redisHostname, port: 6379),
+            logger: Logger(label: "Redis")
         )
-        app.logger.logLevel = .trace
-        app.addJobs(using: .redis(configuration: .init(queueKey: "testShutdownJob")), numWorkers: 1)
+        let redis = RedisConnectionPoolService(pool: redisConnectionPool)
+        var logger = Logger(label: "HummingbirdJobsTests")
+        logger.logLevel = .trace
+        let jobQueue = try await self.testJobQueue(redis: redis, numWorkers: 4) { jobQueue in
+            try await jobQueue.push(TestJob())
+            return jobQueue
+        }
 
-        try app.start()
+        let pendingJobs = try await jobQueue.redisConnectionPool.llen(of: jobQueue.configuration.queueKey).get()
+        XCTAssertEqual(pendingJobs, 0)
+        let failedJobs = try await jobQueue.redisConnectionPool.llen(of: jobQueue.configuration.failedQueueKey).get()
+        XCTAssertEqual(failedJobs, 1)
 
-        let job = TestJob()
-        app.jobs.queue.enqueue(job, on: app.eventLoopGroup.next())
+        try await redis.close()
+    }
 
-        // stall to give job chance to start running
-        Thread.sleep(forTimeInterval: 0.5)
-        app.stop()
-        app.wait()
+    /// test job fails to decode but queue continues to process
+    func testFailToDecode() async throws {
+        struct TestJob1: HBJob {
+            static let name = "testFailToDecode"
+            func execute(logger: Logger) async throws {}
+        }
+        struct TestJob2: HBJob {
+            static let name = "testFailToDecode2"
+            static var value: String?
+            static let executedExpectaion = AsyncExpectation(1)
+            let value: String
+            func execute(logger: Logger) async throws {
+                Self.value = self.value
+                await Self.executedExpectaion.fulfill()
+            }
+        }
+        TestJob2.register()
 
-        XCTAssertTrue(TestJob.started)
-        XCTAssertTrue(TestJob.finished)
+        try await self.testJobQueue(numWorkers: 4) { jobQueue in
+            try await jobQueue.push(TestJob1())
+            try await jobQueue.push(TestJob2(value: "test"))
+            // stall to give job chance to start running
+            try await withTimeout(timeout: .seconds(5)) { try await TestJob2.executedExpectaion.wait() }
+
+            let pendingJobs = try await jobQueue.redisConnectionPool.llen(of: jobQueue.configuration.queueKey).get()
+            XCTAssertEqual(pendingJobs, 0)
+        }
+
+        XCTAssertEqual(TestJob2.value, "test")
     }
 
     /// creates job that errors on first attempt, and is left on processing queue and
     /// is then rerun on startup of new server
-    func testRerunAtStartup() throws {
+    func testRerunAtStartup() async throws {
         struct RetryError: Error {}
-        class TestJob: HBJob {
+        struct TestJob: HBJob {
             static let name = "testRerunAtStartup"
             static let maxRetryCount: Int = 0
-            static var firstTime: Bool = true
-            static var finished: Bool = false
-            func execute(on eventLoop: EventLoop, logger: Logger) -> EventLoopFuture<Void> {
-                if Self.firstTime {
-                    Self.firstTime = false
-                    return eventLoop.makeFailedFuture(RetryError())
-                } else {
-                    Self.finished = true
-                    return eventLoop.makeSucceededVoidFuture()
+            static var firstTime = ManagedAtomic(true)
+            static var finished = ManagedAtomic(false)
+            static let failedExpectation = AsyncExpectation(1)
+            static let succeededExpectation = AsyncExpectation(1)
+            func execute(logger: Logger) async throws {
+                if Self.firstTime.compareExchange(expected: true, desired: false, ordering: .relaxed).original {
+                    await Self.failedExpectation.fulfill()
+                    throw RetryError()
                 }
+                await Self.succeededExpectation.fulfill()
+                Self.finished.store(true, ordering: .relaxed)
             }
         }
         TestJob.register()
 
-        func createApp() throws -> HBApplication {
-            let app = HBApplication(testing: .live)
-            try app.addRedis(
-                configuration: .init(
-                    hostname: Self.redisHostname,
-                    port: 6379,
-                    pool: .init(connectionRetryTimeout: .seconds(1))
-                )
-            )
-            app.logger.logLevel = .trace
-            app.addJobs(using: .redis(configuration: .init(queueKey: "testRerunAtStartup")), numWorkers: 1)
-            return app
+        try await self.testJobQueue(numWorkers: 4) { jobQueue in
+            try await jobQueue.push(TestJob())
+
+            try await withTimeout(timeout: .seconds(10)) { try await TestJob.failedExpectation.wait() }
+
+            // stall to give job chance to start running
+            try await Task.sleep(for: .milliseconds(50))
+
+            XCTAssertFalse(TestJob.firstTime.load(ordering: .relaxed))
+            XCTAssertFalse(TestJob.finished.load(ordering: .relaxed))
         }
 
-        let app = try createApp()
-        try app.start()
-        app.jobs.queue.enqueue(TestJob(), on: app.eventLoopGroup.next())
-        // stall to give job chance to start running
-        Thread.sleep(forTimeInterval: 0.5)
-        app.stop()
-        app.wait()
+        try await self.testJobQueue(numWorkers: 4, failedJobsInitialization: .rerun) { _ in
 
-        XCTAssertFalse(TestJob.firstTime)
-        XCTAssertFalse(TestJob.finished)
+            try await withTimeout(timeout: .seconds(10)) { try await TestJob.succeededExpectation.wait() }
 
-        let app2 = try createApp()
-        try app2.start()
-        // stall to give job chance to start running
-        Thread.sleep(forTimeInterval: 0.5)
-        app2.stop()
-        app2.wait()
-
-        XCTAssertTrue(TestJob.finished)
+            XCTAssertTrue(TestJob.finished.load(ordering: .relaxed))
+        }
     }
-
-    func testSecondRedis() throws {
-        struct TestJob: HBJob {
-            static let name = "testBasic"
-            static let expectation = XCTestExpectation(description: "Jobs Completed")
-
-            let value: Int
-            func execute(on eventLoop: EventLoop, logger: Logger) -> EventLoopFuture<Void> {
-                print(self.value)
-                return eventLoop.scheduleTask(in: .milliseconds(Int64.random(in: 10..<50))) {
-                    Self.expectation.fulfill()
-                }.futureResult
-            }
-        }
-        TestJob.expectation.expectedFulfillmentCount = 10
-        TestJob.register()
-
-        let app = HBApplication(testing: .live)
-        // add dummy default redis which connects to local web server (all we need is a live connection)
-        try app.addRedis(configuration: .init(hostname: "localhost", port: 8080))
-        try app.addRedis(
-            id: "jobsTest",
-            configuration: .init(
-                hostname: Self.redisHostname,
-                port: 6379,
-                pool: .init(connectionRetryTimeout: .seconds(1))
-            )
-        )
-        app.logger.logLevel = .trace
-        app.addJobs(using: .redis(id: "jobsTest", configuration: .init(queueKey: "testBasic")), numWorkers: 1)
-
-        try app.start()
-        defer { app.stop() }
-
-        app.jobs.queue.enqueue(TestJob(value: 1), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 2), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 3), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 4), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 5), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 6), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 7), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 8), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 9), on: app.eventLoopGroup.next())
-        app.jobs.queue.enqueue(TestJob(value: 0), on: app.eventLoopGroup.next())
-
-        wait(for: [TestJob.expectation], timeout: 5)
-    }
-
-    func testRedisQueueOutsideApp() throws {
-        struct TestJob: HBJob {
-            static let name = "testRedisOutsideApp"
-            static let expectation = XCTestExpectation(description: "Jobs Completed")
-
-            let value: Int
-            func execute(on eventLoop: EventLoop, logger: Logger) -> EventLoopFuture<Void> {
-                print(self.value)
-                return eventLoop.scheduleTask(in: .milliseconds(Int64.random(in: 10..<50))) {
-                    Self.expectation.fulfill()
-                }.futureResult
-            }
-        }
-        TestJob.expectation.expectedFulfillmentCount = 5
-        TestJob.register()
-
-        let app = HBApplication(testing: .live)
-        app.logger.logLevel = .trace
-
-        let redisConnectionPoolGroup = try RedisConnectionPoolGroup(
-            configuration: .init(hostname: Self.redisHostname, port: 6379),
-            eventLoopGroup: app.eventLoopGroup,
-            logger: app.logger
-        )
-        let redisJobQueue = HBRedisJobQueue(
-            redisConnectionPoolGroup,
-            configuration: .init(queueKey: "testBasic")
-        )
-        let jobQueueHandler = HBJobQueueHandler(
-            queue: redisJobQueue,
-            numWorkers: 1,
-            eventLoopGroup: app.eventLoopGroup,
-            logger: app.logger
-        )
-        defer {
-            try? jobQueueHandler.shutdown().wait()
-            try? redisConnectionPoolGroup.shutdown().wait()
-        }
-        jobQueueHandler.start()
-
-        jobQueueHandler.enqueue(TestJob(value: 1), on: app.eventLoopGroup.next())
-        jobQueueHandler.enqueue(TestJob(value: 2), on: app.eventLoopGroup.next())
-        jobQueueHandler.enqueue(TestJob(value: 3), on: app.eventLoopGroup.next())
-        jobQueueHandler.enqueue(TestJob(value: 4), on: app.eventLoopGroup.next())
-        jobQueueHandler.enqueue(TestJob(value: 5), on: app.eventLoopGroup.next())
-
-        wait(for: [TestJob.expectation], timeout: 5)
-    }
-}
-
-extension HBJobQueueId {
-    static var redisTest: HBJobQueueId { "test" }
 }
