@@ -40,7 +40,6 @@ public final class HBRedisJobQueue: HBJobQueue {
     let redisConnectionPool: RedisConnectionPoolService
     let configuration: Configuration
     let isStopped: ManagedAtomic<Bool>
-    public var pollTime: TimeAmount { self.configuration.pollTime }
 
     /// Initialize redis job queue
     /// - Parameters:
@@ -177,6 +176,7 @@ public final class HBRedisJobQueue: HBJobQueue {
     }
 }
 
+/// extend HBRedisJobQueue to conform to AsyncSequence
 extension HBRedisJobQueue {
     public struct AsyncIterator: AsyncIteratorProtocol {
         let queue: HBRedisJobQueue
@@ -189,7 +189,8 @@ extension HBRedisJobQueue {
                 if let job = try await queue.popFirst() {
                     return job
                 }
-                try await Task.sleep(for: .milliseconds(100))
+                // we only sleep if we didn't receive a job
+                try await Task.sleep(for: self.queue.configuration.pollTime)
             }
         }
     }

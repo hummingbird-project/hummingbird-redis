@@ -31,11 +31,11 @@ extension HBRedisJobQueue {
         let pendingJobInitialization: JobInitialization
         let processingJobsInitialization: JobInitialization
         let failedJobsInitialization: JobInitialization
-        let pollTime: TimeAmount
+        let pollTime: Duration
 
         public init(
             queueKey: String = "_hbJobQueue",
-            pollTime: TimeAmount = .milliseconds(100),
+            pollTime: Duration = .milliseconds(100),
             pendingJobInitialization: JobInitialization = .doNothing,
             processingJobsInitialization: JobInitialization = .rerun,
             failedJobsInitialization: JobInitialization = .doNothing
