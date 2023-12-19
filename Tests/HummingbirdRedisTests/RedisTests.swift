@@ -25,7 +25,8 @@ final class HummingbirdRedisTests: XCTestCase {
 
     func testApplication() async throws {
         let redis = try RedisConnectionPoolService(
-            pool: .init(.init(hostname: Self.redisHostname, port: 6379), logger: Logger(label: "Redis"))
+            .init(hostname: Self.redisHostname, port: 6379),
+            logger: Logger(label: "Redis")
         )
 
         let info = try await redis.send(command: "INFO").get()
