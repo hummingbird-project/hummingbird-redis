@@ -46,21 +46,20 @@ final class HummingbirdRedisJobsTests: XCTestCase {
     /// Creates test client, runs test function abd ensures everything is
     /// shutdown correctly
     @discardableResult public func testJobQueue<T>(
-        redis: RedisConnectionPoolService? = nil,
+        redis: HBRedisConnectionPoolService? = nil,
         numWorkers: Int,
         failedJobsInitialization: HBRedisJobQueue.JobInitialization = .remove,
         test: (HBRedisJobQueue) async throws -> T
     ) async throws -> T {
-        let redisService: RedisConnectionPoolService
+        let redisService: HBRedisConnectionPoolService
         var additionalServices: [any Service] = []
         if let redis = redis {
             redisService = redis
         } else {
-            let redisConnectionPool = try RedisConnectionPool(
+            redisService = try HBRedisConnectionPoolService(
                 .init(hostname: Self.redisHostname, port: 6379),
                 logger: Logger(label: "Redis")
             )
-            redisService = RedisConnectionPoolService(pool: redisConnectionPool)
             additionalServices = [redisService]
         }
         let redisJobQueue = HBRedisJobQueue(
@@ -209,11 +208,10 @@ final class HummingbirdRedisJobsTests: XCTestCase {
         }
         TestJob.register()
 
-        let redisConnectionPool = try RedisConnectionPool(
+        let redis = try HBRedisConnectionPoolService(
             .init(hostname: Self.redisHostname, port: 6379),
             logger: Logger(label: "Redis")
         )
-        let redis = RedisConnectionPoolService(pool: redisConnectionPool)
         var logger = Logger(label: "HummingbirdJobsTests")
         logger.logLevel = .trace
         let jobQueue = try await self.testJobQueue(redis: redis, numWorkers: 4) { jobQueue in

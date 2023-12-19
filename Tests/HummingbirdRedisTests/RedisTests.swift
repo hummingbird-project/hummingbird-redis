@@ -24,7 +24,7 @@ final class HummingbirdRedisTests: XCTestCase {
     static let redisHostname = env.get("REDIS_HOSTNAME") ?? "localhost"
 
     func testApplication() async throws {
-        let redis = try RedisConnectionPoolService(
+        let redis = try HBRedisConnectionPoolService(
             .init(hostname: Self.redisHostname, port: 6379),
             logger: Logger(label: "Redis")
         )
@@ -36,8 +36,9 @@ final class HummingbirdRedisTests: XCTestCase {
     }
 
     func testRouteHandler() async throws {
-        let redis = try RedisConnectionPoolService(
-            pool: .init(.init(hostname: Self.redisHostname, port: 6379), logger: Logger(label: "Redis"))
+        let redis = try HBRedisConnectionPoolService(
+            .init(hostname: Self.redisHostname, port: 6379),
+            logger: Logger(label: "Redis")
         )
         let router = HBRouter(context: HBTestRouterContext.self)
         router.get("redis") { _, _ in

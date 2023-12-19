@@ -17,9 +17,9 @@ import RediStack
 
 /// Redis driver for persist system for storing persistent cross request key/value pairs
 public struct HBRedisPersistDriver: HBPersistDriver {
-    let redisConnectionPool: RedisConnectionPoolService
+    let redisConnectionPool: HBRedisConnectionPoolService
 
-    public init(redisConnectionPoolService: RedisConnectionPoolService) {
+    public init(redisConnectionPoolService: HBRedisConnectionPoolService) {
         self.redisConnectionPool = redisConnectionPoolService
     }
 

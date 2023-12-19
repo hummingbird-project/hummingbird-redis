@@ -20,18 +20,16 @@ import RediStack
 import ServiceLifecycle
 
 /// Wrapper for RedisConnectionPool that conforms to ServiceLifecycle Service
-public struct RedisConnectionPoolService: Service, @unchecked Sendable {
-    public init(pool: RedisConnectionPool) {
-        self.pool = pool
-    }
-
+public struct HBRedisConnectionPoolService: Service, @unchecked Sendable {
     /// Initialize RedisConnectionPoolService
     public init(
         _ config: HBRedisConfiguration,
         eventLoopGroupProvider: EventLoopGroupProvider = .singleton,
         logger: Logger
     ) {
-        self.pool = .init(config, eventLoopGroupProvider: eventLoopGroupProvider, logger: logger)
+        let configuration: RedisConnectionPool.Configuration = .init(config, logger: logger)
+        let eventLoop = eventLoopGroupProvider.eventLoopGroup.any()
+        self.pool = .init(configuration: configuration, boundEventLoop: eventLoop)
     }
 
     public let pool: RedisConnectionPool
@@ -67,7 +65,7 @@ public struct RedisConnectionPoolService: Service, @unchecked Sendable {
     }
 }
 
-extension RedisConnectionPoolService {
+extension HBRedisConnectionPoolService {
     /// A unique identifer to represent this connection.
     @inlinable
     public var id: UUID { self.pool.id }
@@ -125,7 +123,7 @@ extension RedisConnectionPoolService {
     }
 }
 
-extension RedisConnectionPoolService: RedisClient {
+extension HBRedisConnectionPoolService: RedisClient {
     @inlinable
     public var eventLoop: NIOCore.EventLoop { self.pool.eventLoop }
 

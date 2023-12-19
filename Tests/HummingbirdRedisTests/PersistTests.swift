@@ -24,12 +24,11 @@ final class PersistTests: XCTestCase {
 
     func createRouter() throws -> (HBRouter<HBTestRouterContext>, HBPersistDriver) {
         let router = HBRouter(context: HBTestRouterContext.self)
-        let redisConnectionPool = try RedisConnectionPool(
+        let redisConnectionPool = try HBRedisConnectionPoolService(
             .init(hostname: Self.redisHostname, port: 6379),
             logger: Logger(label: "Redis")
         )
-        let redisConnectionPoolService = RedisConnectionPoolService(pool: redisConnectionPool)
-        let persist = HBRedisPersistDriver(redisConnectionPoolService: redisConnectionPoolService)
+        let persist = HBRedisPersistDriver(redisConnectionPoolService: redisConnectionPool)
 
         router.put("/persist/:tag") { request, context -> HTTPResponse.Status in
             let buffer = try await request.body.collect(upTo: .max)

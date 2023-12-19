@@ -37,7 +37,7 @@ public final class HBRedisJobQueue: HBJobQueue {
         }
     }
 
-    let redisConnectionPool: RedisConnectionPoolService
+    let redisConnectionPool: HBRedisConnectionPoolService
     let configuration: Configuration
     let isStopped: ManagedAtomic<Bool>
 
@@ -45,7 +45,7 @@ public final class HBRedisJobQueue: HBJobQueue {
     /// - Parameters:
     ///   - redisConnectionPoolGroup: Redis connection pool group
     ///   - configuration: configuration
-    public init(_ redisConnectionPoolService: RedisConnectionPoolService, configuration: Configuration) {
+    public init(_ redisConnectionPoolService: HBRedisConnectionPoolService, configuration: Configuration) {
         self.redisConnectionPool = redisConnectionPoolService
         self.configuration = configuration
         self.isStopped = .init(false)

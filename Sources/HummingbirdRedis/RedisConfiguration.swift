@@ -102,13 +102,12 @@ public struct HBRedisConfiguration {
     }
 }
 
-extension RedisConnectionPool {
-    public convenience init(
+extension RedisConnectionPool.Configuration {
+    init(
         _ config: HBRedisConfiguration,
-        eventLoopGroupProvider: EventLoopGroupProvider = .singleton,
         logger: Logger
     ) {
-        let configuration: Configuration = .init(
+        self.init(
             initialServerConnectionAddresses: config.serverAddresses,
             maximumConnectionCount: config.pool.maximumConnectionCount,
             connectionFactoryConfiguration: .init(
@@ -123,7 +122,5 @@ extension RedisConnectionPool {
             connectionRetryTimeout: config.pool.connectionRetryTimeout,
             poolDefaultLogger: logger
         )
-        let eventLoop = eventLoopGroupProvider.eventLoopGroup.any()
-        self.init(configuration: configuration, boundEventLoop: eventLoop)
     }
 }
