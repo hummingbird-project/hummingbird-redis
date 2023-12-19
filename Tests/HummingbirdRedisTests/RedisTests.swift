@@ -38,14 +38,14 @@ final class HummingbirdRedisTests: XCTestCase {
         let redis = try RedisConnectionPoolService(
             pool: .init(.init(hostname: Self.redisHostname, port: 6379), logger: Logger(label: "Redis"))
         )
-        let router = HBRouterBuilder(context: HBTestRouterContext.self)
+        let router = HBRouter(context: HBTestRouterContext.self)
         router.get("redis") { _, _ in
             try await redis.send(command: "INFO").map(\.description).get()
         }
         var app = HBApplication(responder: router.buildResponder())
         app.addService(redis)
         try await app.test(.live) { client in
-            try await client.XCTExecute(uri: "/redis", method: .GET) { response in
+            try await client.XCTExecute(uri: "/redis", method: .get) { response in
                 var body = try XCTUnwrap(response.body)
                 XCTAssertEqual(body.readString(length: body.readableBytes)?.contains("redis_version"), true)
             }

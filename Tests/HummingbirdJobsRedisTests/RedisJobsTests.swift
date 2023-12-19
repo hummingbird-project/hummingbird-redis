@@ -22,7 +22,22 @@ import RediStack
 import ServiceLifecycle
 import XCTest
 
+extension XCTestExpectation {
+    convenience init(description: String, expectedFulfillmentCount: Int = 1) {
+        self.init(description: description)
+        self.expectedFulfillmentCount = expectedFulfillmentCount
+    }
+}
+
 final class HummingbirdRedisJobsTests: XCTestCase {
+    func wait(for expectations: [XCTestExpectation], timeout: TimeInterval) async {
+        #if (os(Linux) && swift(<5.10)) || swift(<5.8)
+        super.wait(for: expectations, timeout: timeout)
+        #else
+        await fulfillment(of: expectations, timeout: timeout)
+        #endif
+    }
+
     static let env = HBEnvironment()
     static let redisHostname = env.get("REDIS_HOSTNAME") ?? "localhost"
 
@@ -84,13 +99,13 @@ final class HummingbirdRedisJobsTests: XCTestCase {
     func testBasic() async throws {
         struct TestJob: HBJob {
             static let name = "testBasic"
-            static let expectation = AsyncExpectation(10)
+            static let expectation = XCTestExpectation(description: "TestJob.execute was called", expectedFulfillmentCount: 10)
 
             let value: Int
             func execute(logger: Logger) async throws {
                 print(self.value)
                 try await Task.sleep(for: .milliseconds(Int.random(in: 10..<50)))
-                await Self.expectation.fulfill()
+                Self.expectation.fulfill()
             }
         }
         TestJob.register()
@@ -106,7 +121,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
             try await jobQueue.push(TestJob(value: 9))
             try await jobQueue.push(TestJob(value: 10))
 
-            try await withTimeout(timeout: .seconds(10)) { try await TestJob.expectation.wait() }
+            await self.wait(for: [TestJob.expectation], timeout: 5)
 
             let pendingJobs = try await jobQueue.redisConnectionPool.llen(of: jobQueue.configuration.queueKey).get()
             XCTAssertEqual(pendingJobs, 0)
@@ -118,7 +133,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
             static let name = "testMultipleWorkers"
             static let runningJobCounter = ManagedAtomic(0)
             static let maxRunningJobCounter = ManagedAtomic(0)
-            static let expectation = AsyncExpectation(10)
+            static let expectation = XCTestExpectation(description: "TestJob.execute was called", expectedFulfillmentCount: 10)
 
             let value: Int
             func execute(logger: Logger) async throws {
@@ -128,7 +143,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
                 }
                 try await Task.sleep(for: .milliseconds(Int.random(in: 10..<100)))
                 print(self.value)
-                await Self.expectation.fulfill()
+                Self.expectation.fulfill()
                 Self.runningJobCounter.wrappingDecrement(by: 1, ordering: .relaxed)
             }
         }
@@ -146,7 +161,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
             try await jobQueue.push(TestJob(value: 9))
             try await jobQueue.push(TestJob(value: 10))
 
-            try await withTimeout(timeout: .seconds(5)) { try await TestJob.expectation.wait() }
+            await self.wait(for: [TestJob.expectation], timeout: 5)
 
             XCTAssertGreaterThan(TestJob.maxRunningJobCounter.load(ordering: .relaxed), 1)
             XCTAssertLessThanOrEqual(TestJob.maxRunningJobCounter.load(ordering: .relaxed), 4)
@@ -162,9 +177,9 @@ final class HummingbirdRedisJobsTests: XCTestCase {
         struct TestJob: HBJob {
             static let name = "testErrorRetryCount"
             static let maxRetryCount = 3
-            static let expectation = AsyncExpectation(4)
+            static let expectation = XCTestExpectation(description: "TestJob.execute was called", expectedFulfillmentCount: 4)
             func execute(logger: Logger) async throws {
-                await Self.expectation.fulfill()
+                Self.expectation.fulfill()
                 throw FailedError()
             }
         }
@@ -173,7 +188,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
         try await self.testJobQueue(numWorkers: 4) { jobQueue in
             try await jobQueue.push(TestJob())
 
-            try await withTimeout(timeout: .seconds(5)) { try await TestJob.expectation.wait() }
+            await self.wait(for: [TestJob.expectation], timeout: 5)
             try await Task.sleep(for: .milliseconds(200))
 
             let failedJobs = try await jobQueue.redisConnectionPool.llen(of: jobQueue.configuration.failedQueueKey).get()
@@ -223,11 +238,11 @@ final class HummingbirdRedisJobsTests: XCTestCase {
         struct TestJob2: HBJob {
             static let name = "testFailToDecode2"
             static var value: String?
-            static let executedExpectaion = AsyncExpectation(1)
+            static let expectation = XCTestExpectation(description: "TestJob2.execute was called")
             let value: String
             func execute(logger: Logger) async throws {
                 Self.value = self.value
-                await Self.executedExpectaion.fulfill()
+                Self.expectation.fulfill()
             }
         }
         TestJob2.register()
@@ -236,8 +251,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
             try await jobQueue.push(TestJob1())
             try await jobQueue.push(TestJob2(value: "test"))
             // stall to give job chance to start running
-            try await withTimeout(timeout: .seconds(5)) { try await TestJob2.executedExpectaion.wait() }
-
+            await self.wait(for: [TestJob2.expectation], timeout: 5)
             let pendingJobs = try await jobQueue.redisConnectionPool.llen(of: jobQueue.configuration.queueKey).get()
             XCTAssertEqual(pendingJobs, 0)
         }
@@ -254,14 +268,14 @@ final class HummingbirdRedisJobsTests: XCTestCase {
             static let maxRetryCount: Int = 0
             static var firstTime = ManagedAtomic(true)
             static var finished = ManagedAtomic(false)
-            static let failedExpectation = AsyncExpectation(1)
-            static let succeededExpectation = AsyncExpectation(1)
+            static let failedExpectation = XCTestExpectation(description: "TestJob failed")
+            static let succeededExpectation = XCTestExpectation(description: "TestJob2 succeeded")
             func execute(logger: Logger) async throws {
                 if Self.firstTime.compareExchange(expected: true, desired: false, ordering: .relaxed).original {
-                    await Self.failedExpectation.fulfill()
+                    Self.failedExpectation.fulfill()
                     throw RetryError()
                 }
-                await Self.succeededExpectation.fulfill()
+                Self.succeededExpectation.fulfill()
                 Self.finished.store(true, ordering: .relaxed)
             }
         }
@@ -270,7 +284,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
         try await self.testJobQueue(numWorkers: 4) { jobQueue in
             try await jobQueue.push(TestJob())
 
-            try await withTimeout(timeout: .seconds(10)) { try await TestJob.failedExpectation.wait() }
+            await self.wait(for: [TestJob.failedExpectation], timeout: 10)
 
             // stall to give job chance to start running
             try await Task.sleep(for: .milliseconds(50))
@@ -280,9 +294,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
         }
 
         try await self.testJobQueue(numWorkers: 4, failedJobsInitialization: .rerun) { _ in
-
-            try await withTimeout(timeout: .seconds(10)) { try await TestJob.succeededExpectation.wait() }
-
+            await self.wait(for: [TestJob.succeededExpectation], timeout: 10)
             XCTAssertTrue(TestJob.finished.load(ordering: .relaxed))
         }
     }
