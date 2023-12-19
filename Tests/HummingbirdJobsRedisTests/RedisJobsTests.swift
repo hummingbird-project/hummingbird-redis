@@ -23,7 +23,7 @@ import ServiceLifecycle
 import XCTest
 
 extension XCTestExpectation {
-    convenience init(description: String, expectedFulfillmentCount: Int = 1) {
+    convenience init(description: String, expectedFulfillmentCount: Int) {
         self.init(description: description)
         self.expectedFulfillmentCount = expectedFulfillmentCount
     }
