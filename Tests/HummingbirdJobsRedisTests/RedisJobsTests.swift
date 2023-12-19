@@ -266,8 +266,8 @@ final class HummingbirdRedisJobsTests: XCTestCase {
             static let maxRetryCount: Int = 0
             static var firstTime = ManagedAtomic(true)
             static var finished = ManagedAtomic(false)
-            static let failedExpectation = XCTestExpectation(description: "TestJob failed")
-            static let succeededExpectation = XCTestExpectation(description: "TestJob2 succeeded")
+            static let failedExpectation = XCTestExpectation(description: "TestJob failed", expectedFulfillmentCount: 1)
+            static let succeededExpectation = XCTestExpectation(description: "TestJob2 succeeded", expectedFulfillmentCount: 1)
             func execute(logger: Logger) async throws {
                 if Self.firstTime.compareExchange(expected: true, desired: false, ordering: .relaxed).original {
                     Self.failedExpectation.fulfill()
