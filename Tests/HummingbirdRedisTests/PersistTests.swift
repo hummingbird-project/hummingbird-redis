@@ -22,8 +22,8 @@ import XCTest
 final class PersistTests: XCTestCase {
     static let redisHostname = HBEnvironment.shared.get("REDIS_HOSTNAME") ?? "localhost"
 
-    func createRouter() throws -> (HBRouter<HBTestRouterContext>, HBPersistDriver) {
-        let router = HBRouter(context: HBTestRouterContext.self)
+    func createRouter() throws -> (HBRouter<some HBRequestContext>, HBPersistDriver) {
+        let router = HBRouter()
         let redisConnectionPool = try HBRedisConnectionPoolService(
             .init(hostname: Self.redisHostname, port: 6379),
             logger: Logger(label: "Redis")

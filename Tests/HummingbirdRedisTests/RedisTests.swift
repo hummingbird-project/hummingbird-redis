@@ -40,7 +40,7 @@ final class HummingbirdRedisTests: XCTestCase {
             .init(hostname: Self.redisHostname, port: 6379),
             logger: Logger(label: "Redis")
         )
-        let router = HBRouter(context: HBTestRouterContext.self)
+        let router = HBRouter()
         router.get("redis") { _, _ in
             try await redis.send(command: "INFO").map(\.description).get()
         }
