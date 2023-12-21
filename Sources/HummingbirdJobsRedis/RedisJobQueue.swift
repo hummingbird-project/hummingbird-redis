@@ -136,7 +136,7 @@ public final class HBRedisJobQueue: HBJobQueue {
         while true {
             let key = try await self.redisConnectionPool.rpoplpush(from: queueKey, to: self.configuration.queueKey).get()
             if key.isNull {
-                break
+                return
             }
         }
     }
