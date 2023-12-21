@@ -12,70 +12,46 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
 import Hummingbird
 import RediStack
 
 /// Redis driver for persist system for storing persistent cross request key/value pairs
 public struct HBRedisPersistDriver: HBPersistDriver {
-    let redisConnectionPoolGroup: RedisConnectionPoolGroup
+    let redisConnectionPool: HBRedisConnectionPoolService
 
-    public init(redisConnectionPoolGroup: RedisConnectionPoolGroup) {
-        self.redisConnectionPoolGroup = redisConnectionPoolGroup
+    public init(redisConnectionPoolService: HBRedisConnectionPoolService) {
+        self.redisConnectionPool = redisConnectionPoolService
     }
 
     /// create new key with value. If key already exist throw `HBPersistError.duplicate` error
-    public func create<Object: Codable>(key: String, value: Object, expires: TimeAmount?, request: HBRequest) -> EventLoopFuture<Void> {
-        let expiration: RedisSetCommandExpiration? = expires.map { .seconds(Int($0.nanoseconds / 1_000_000_000)) }
-        let redis = self.redisConnectionPoolGroup.pool(for: request.eventLoop)
-        return redis.set(.init(key), toJSON: value, onCondition: .keyDoesNotExist, expiration: expiration).flatMapThrowing { result in
-            switch result {
-            case .ok:
-                return
-            case .conditionNotMet:
-                throw HBPersistError.duplicate
-            }
+    public func create<Object: Codable>(key: String, value: Object, expires: Duration?) async throws {
+        let expiration: RedisSetCommandExpiration? = expires.map { .seconds(Int($0.components.seconds)) }
+        let result = try await self.redisConnectionPool.set(.init(key), toJSON: value, onCondition: .keyDoesNotExist, expiration: expiration).get()
+        switch result {
+        case .ok:
+            return
+        case .conditionNotMet:
+            throw HBPersistError.duplicate
         }
     }
 
     /// set value for key. If value already exists overwrite it
-    public func set<Object: Codable>(key: String, value: Object, expires: TimeAmount?, request: HBRequest) -> EventLoopFuture<Void> {
-        let redis = self.redisConnectionPoolGroup.pool(for: request.eventLoop)
+    public func set<Object: Codable>(key: String, value: Object, expires: Duration?) async throws {
         if let expires = expires {
-            return redis.setex(.init(key), toJSON: value, expirationInSeconds: Int(expires.nanoseconds / 1_000_000_000))
+            let expiration = Int(expires.components.seconds)
+            return try await self.redisConnectionPool.setex(.init(key), toJSON: value, expirationInSeconds: expiration).get()
         } else {
-            return redis.set(.init(key), toJSON: value)
+            return try await self.redisConnectionPool.set(.init(key), toJSON: value).get()
         }
     }
 
     /// get value for key
-    public func get<Object: Codable>(key: String, as object: Object.Type, request: HBRequest) -> EventLoopFuture<Object?> {
-        let redis = self.redisConnectionPoolGroup.pool(for: request.eventLoop)
-        return redis.get(.init(key), asJSON: object)
+    public func get<Object: Codable>(key: String, as object: Object.Type) async throws -> Object? {
+        try await self.redisConnectionPool.get(.init(key), asJSON: object).get()
     }
 
     /// remove key
-    public func remove(key: String, request: HBRequest) -> EventLoopFuture<Void> {
-        let redis = self.redisConnectionPoolGroup.pool(for: request.eventLoop)
-        return redis.delete(.init(key))
-            .map { _ in }
-    }
-}
-
-/// Factory class for persist drivers
-extension HBPersistDriverFactory {
-    /// Redis driver for persist system
-    public static var redis: HBPersistDriverFactory {
-        .init(create: { app in HBRedisPersistDriver(redisConnectionPoolGroup: app.redis) })
-    }
-
-    /// Redis driver for persist system
-    public static func redis(id: RedisConnectionPoolGroupIdentifier) -> HBPersistDriverFactory {
-        .init { app in
-            guard let redisConnectionPoolGroup = app.redisConnectionPools[id] else {
-                preconditionFailure("Redis Connection Pool Group id: \(id) does not exist")
-            }
-            return HBRedisPersistDriver(redisConnectionPoolGroup: redisConnectionPoolGroup)
-        }
+    public func remove(key: String) async throws {
+        _ = try await self.redisConnectionPool.delete(.init(key)).get()
     }
 }
