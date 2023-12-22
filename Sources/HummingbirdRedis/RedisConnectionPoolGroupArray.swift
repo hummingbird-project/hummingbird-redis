@@ -12,6 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+import Logging
 import NIOCore
 
 public struct RedisConnectionPoolGroupIdentifier: Hashable, ExpressibleByStringLiteral {

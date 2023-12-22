@@ -14,10 +14,10 @@
 
 // This is almost a wholesale copy of the Vapor redis configuration that can be found
 // here https://github.com/vapor/redis/blob/master/Sources/Redis/RedisConfiguration.swift
-@_exported import struct Foundation.URL
-@_exported import struct Logging.Logger
+import struct Foundation.URL
+import struct Logging.Logger
 import enum NIO.SocketAddress
-@_exported import struct NIO.TimeAmount
+import struct NIO.TimeAmount
 import RediStack
 
 public struct HBRedisConfiguration {

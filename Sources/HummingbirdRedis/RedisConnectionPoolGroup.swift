@@ -15,6 +15,7 @@
 import Hummingbird
 import Lifecycle
 import LifecycleNIOCompat
+import Logging
 import RediStack
 
 /// Store Redis connection pool array for an EventLoopGroup.

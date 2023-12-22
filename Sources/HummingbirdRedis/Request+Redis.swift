@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Hummingbird
+import Logging
 import RediStack
 
 extension HBRequest {
