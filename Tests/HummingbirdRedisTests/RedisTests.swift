@@ -45,7 +45,7 @@ final class HummingbirdRedisTests: XCTestCase {
             try await redis.send(command: "INFO").map(\.description).get()
         }
         var app = HBApplication(responder: router.buildResponder())
-        app.addService(redis)
+        app.addServices(redis)
         try await app.test(.live) { client in
             try await client.XCTExecute(uri: "/redis", method: .get) { response in
                 var body = try XCTUnwrap(response.body)
