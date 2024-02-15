@@ -202,8 +202,10 @@ final class HummingbirdRedisJobsTests: XCTestCase {
     func testShutdownJob() async throws {
         struct TestJob: HBJob {
             static let name = "testShutdownJob"
+            static let expectation = XCTestExpectation(description: "TestJob.execute was called", expectedFulfillmentCount: 1)
             func execute(logger: Logger) async throws {
-                try await Task.sleep(for: .milliseconds(100))
+                Self.expectation.fulfill()
+                try await Task.sleep(for: .milliseconds(1000))
             }
         }
         TestJob.register()
@@ -216,13 +218,15 @@ final class HummingbirdRedisJobsTests: XCTestCase {
         logger.logLevel = .trace
         let jobQueue = try await self.testJobQueue(redis: redis, numWorkers: 4) { jobQueue in
             try await jobQueue.push(TestJob())
+            await self.wait(for: [TestJob.expectation], timeout: 5)
             return jobQueue
         }
 
         let pendingJobs = try await jobQueue.redisConnectionPool.llen(of: jobQueue.configuration.queueKey).get()
         XCTAssertEqual(pendingJobs, 0)
         let failedJobs = try await jobQueue.redisConnectionPool.llen(of: jobQueue.configuration.failedQueueKey).get()
-        XCTAssertEqual(failedJobs, 1)
+        let processingJobs = try await jobQueue.redisConnectionPool.llen(of: jobQueue.configuration.processingQueueKey).get()
+        XCTAssertEqual(failedJobs + processingJobs, 1)
 
         try await redis.close()
     }

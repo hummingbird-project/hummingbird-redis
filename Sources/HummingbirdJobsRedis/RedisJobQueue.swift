@@ -15,6 +15,7 @@
 import Atomics
 import struct Foundation.Data
 import class Foundation.JSONDecoder
+import struct Foundation.UUID
 import Hummingbird
 import HummingbirdJobs
 import HummingbirdRedis
@@ -23,9 +24,38 @@ import RediStack
 
 /// Redis implementation of job queues
 public final class HBRedisJobQueue: HBJobQueue {
+    public struct JobID: Sendable, CustomStringConvertible {
+        let id: String
+
+        public init() {
+            self.id = UUID().uuidString
+        }
+
+        /// Initialize JobID from String
+        /// - Parameter value: string value
+        public init(_ value: String) {
+            self.id = value
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            self.id = try container.decode(String.self)
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
+            try container.encode(self.id)
+        }
+
+        var redisKey: RedisKey { .init(self.description) }
+
+        /// String description of Identifier
+        public var description: String { self.id }
+    }
+
     public enum RedisQueueError: Error, CustomStringConvertible {
         case unexpectedRedisKeyType
-        case jobMissing(JobIdentifier)
+        case jobMissing(JobID)
 
         public var description: String {
             switch self {
@@ -66,11 +96,11 @@ public final class HBRedisJobQueue: HBJobQueue {
     /// - Parameters:
     ///   - job: Job descriptor
     /// - Returns: Queued job identifier
-    @discardableResult public func push(_ job: any HBJob) async throws -> JobIdentifier {
-        let queuedJob = HBQueuedJob(job)
-        _ = try await self.set(jobId: queuedJob.id, job: queuedJob.job)
-        _ = try await self.redisConnectionPool.lpush(queuedJob.id.redisKey, into: self.configuration.queueKey).get()
-        return queuedJob.id
+    @discardableResult public func push(_ job: any HBJob) async throws -> JobID {
+        let id = JobID()
+        try await self.set(jobId: id, job: job)
+        _ = try await self.redisConnectionPool.lpush(id.redisKey, into: self.configuration.queueKey).get()
+        return id
     }
 
     /// Flag job is done
@@ -78,7 +108,7 @@ public final class HBRedisJobQueue: HBJobQueue {
     /// Removes  job id from processing queue
     /// - Parameters:
     ///   - jobId: Job id
-    public func finished(jobId: JobIdentifier) async throws {
+    public func finished(jobId: JobID) async throws {
         _ = try await self.redisConnectionPool.lrem(jobId.description, from: self.configuration.processingQueueKey, count: 0).get()
         try await self.delete(jobId: jobId)
     }
@@ -88,7 +118,7 @@ public final class HBRedisJobQueue: HBJobQueue {
     /// Removes  job id from processing queue, adds to failed queue
     /// - Parameters:
     ///   - jobId: Job id
-    public func failed(jobId: JobIdentifier, error: Error) async throws {
+    public func failed(jobId: JobID, error: Error) async throws {
         _ = try await self.redisConnectionPool.lrem(jobId.redisKey, from: self.configuration.processingQueueKey, count: 0).get()
         _ = try await self.redisConnectionPool.lpush(jobId.redisKey, into: self.configuration.failedQueueKey).get()
     }
@@ -102,7 +132,7 @@ public final class HBRedisJobQueue: HBJobQueue {
     /// Pop Job off queue and add to pending queue
     /// - Parameter eventLoop: eventLoop to do work on
     /// - Returns: queued job
-    func popFirst() async throws -> HBQueuedJob? {
+    func popFirst() async throws -> HBQueuedJob<JobID>? {
         let pool = self.redisConnectionPool.pool
         let key = try await pool.rpoplpush(from: self.configuration.queueKey, to: self.configuration.processingQueueKey).get()
         guard !key.isNull else {
@@ -111,7 +141,7 @@ public final class HBRedisJobQueue: HBJobQueue {
         guard let key = String(fromRESP: key) else {
             throw RedisQueueError.unexpectedRedisKeyType
         }
-        let identifier = JobIdentifier(fromKey: key)
+        let identifier = JobID(key)
         if let job = try await self.get(jobId: identifier) {
             return .init(id: identifier, job: job)
         } else {
@@ -151,27 +181,27 @@ public final class HBRedisJobQueue: HBJobQueue {
             guard let key = String(fromRESP: key) else {
                 throw RedisQueueError.unexpectedRedisKeyType
             }
-            let identifier = JobIdentifier(fromKey: key)
+            let identifier = JobID(key)
             try await self.delete(jobId: identifier)
         }
     }
 
-    func get(jobId: JobIdentifier) async throws -> HBJobInstance? {
+    func get(jobId: JobID) async throws -> HBJob? {
         guard let data = try await self.redisConnectionPool.get(jobId.redisKey, as: Data.self).get() else {
             return nil
         }
         do {
-            return try JSONDecoder().decode(HBJobInstance.self, from: data)
+            return try JSONDecoder().decode(HBAnyCodableJob.self, from: data).job
         } catch {
             throw JobQueueError.decodeJobFailed
         }
     }
 
-    func set(jobId: JobIdentifier, job: HBJobInstance) async throws {
-        return try await self.redisConnectionPool.set(jobId.redisKey, toJSON: job).get()
+    func set(jobId: JobID, job: HBJob) async throws {
+        return try await self.redisConnectionPool.set(jobId.redisKey, toJSON: HBAnyCodableJob(job)).get()
     }
 
-    func delete(jobId: JobIdentifier) async throws {
+    func delete(jobId: JobID) async throws {
         _ = try await self.redisConnectionPool.delete(jobId.redisKey).get()
     }
 }
@@ -197,13 +227,5 @@ extension HBRedisJobQueue {
 
     public func makeAsyncIterator() -> AsyncIterator {
         return .init(queue: self)
-    }
-}
-
-extension JobIdentifier {
-    var redisKey: RedisKey { .init(self.description) }
-
-    init(fromKey key: String) {
-        self.init(key)
     }
 }
