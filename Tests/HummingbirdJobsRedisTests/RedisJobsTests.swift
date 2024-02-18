@@ -300,4 +300,63 @@ final class HummingbirdRedisJobsTests: XCTestCase {
             XCTAssertTrue(TestJob.finished.load(ordering: .relaxed))
         }
     }
+
+    func testMultipleJobQueueHandlers() async throws {
+        struct TestJob: HBJob {
+            static let name = "testMultipleJobQueues"
+            static let expectation = XCTestExpectation(description: "TestJob.execute was called", expectedFulfillmentCount: 200)
+
+            let value: Int
+            func execute(logger: Logger) async throws {
+                try await Task.sleep(for: .milliseconds(Int.random(in: 10..<50)))
+                Self.expectation.fulfill()
+            }
+        }
+        TestJob.register()
+        let logger = {
+            var logger = Logger(label: "HummingbirdJobsTests")
+            logger.logLevel = .debug
+            return logger
+        }()
+        let redisService = try HBRedisConnectionPoolService(
+            .init(hostname: Self.redisHostname, port: 6379),
+            logger: Logger(label: "Redis")
+        )
+        let redisJobQueue = HBRedisJobQueue(redisService)
+        let jobQueueHandler = HBJobQueueHandler(
+            queue: redisJobQueue,
+            numWorkers: 2,
+            logger: logger
+        )
+        let redisJobQueue2 = HBRedisJobQueue(redisService)
+        let jobQueueHandler2 = HBJobQueueHandler(
+            queue: redisJobQueue2,
+            numWorkers: 2,
+            logger: logger
+        )
+
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            let serviceGroup = ServiceGroup(
+                configuration: .init(
+                    services: [redisService, jobQueueHandler, jobQueueHandler2],
+                    gracefulShutdownSignals: [.sigterm, .sigint],
+                    logger: logger
+                )
+            )
+            group.addTask {
+                try await serviceGroup.run()
+            }
+            do {
+                for i in 0..<200 {
+                    try await redisJobQueue.push(TestJob(value: i))
+                }
+                await self.wait(for: [TestJob.expectation], timeout: 5)
+                await serviceGroup.triggerGracefulShutdown()
+            } catch {
+                XCTFail("\(String(reflecting: error))")
+                await serviceGroup.triggerGracefulShutdown()
+                throw error
+            }
+        }
+    }
 }

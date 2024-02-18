@@ -75,7 +75,7 @@ public final class HBRedisJobQueue: HBJobQueue {
     /// - Parameters:
     ///   - redisConnectionPoolGroup: Redis connection pool group
     ///   - configuration: configuration
-    public init(_ redisConnectionPoolService: HBRedisConnectionPoolService, configuration: Configuration) {
+    public init(_ redisConnectionPoolService: HBRedisConnectionPoolService, configuration: Configuration = .init()) {
         self.redisConnectionPool = redisConnectionPoolService
         self.configuration = configuration
         self.isStopped = .init(false)
