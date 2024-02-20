@@ -36,7 +36,7 @@ extension RedisClient {
     ///     - value: The value to set the key to.
     /// - Returns: An `EventLoopFuture` that resolves if the operation was successful.
     @inlinable
-    public func set<Value: Encodable>(_ key: RedisKey, toJSON value: Value) -> EventLoopFuture<Void> {
+    public func set(_ key: RedisKey, toJSON value: some Encodable) -> EventLoopFuture<Void> {
         do {
             return try self.set(key, to: JSONEncoder().encode(value))
         } catch {
@@ -60,9 +60,9 @@ extension RedisClient {
     ///     `.ok` if the operation was successful and `.conditionNotMet` if the specified `condition` was not met.
     ///
     ///     If the condition `.none` was used, then the result value will always be `.ok`.
-    public func set<Value: Encodable>(
+    public func set(
         _ key: RedisKey,
-        toJSON value: Value,
+        toJSON value: some Encodable,
         onCondition condition: RedisSetCommandCondition,
         expiration: RedisSetCommandExpiration? = nil
     ) -> EventLoopFuture<RedisSetCommandResult> {
@@ -84,7 +84,7 @@ extension RedisClient {
     ///     - value: The value to set the key to.
     /// - Returns: `true` if the operation successfully completed.
     @inlinable
-    public func setnx<Value: Encodable>(_ key: RedisKey, toJSON value: Value) -> EventLoopFuture<Bool> {
+    public func setnx(_ key: RedisKey, toJSON value: some Encodable) -> EventLoopFuture<Bool> {
         do {
             return try self.setnx(key, to: JSONEncoder().encode(value))
         } catch {
@@ -105,9 +105,9 @@ extension RedisClient {
     ///     - expiration: The number of seconds after which to expire the key.
     /// - Returns: A `NIO.EventLoopFuture` that resolves if the operation was successful.
     @inlinable
-    public func setex<Value: Encodable>(
+    public func setex(
         _ key: RedisKey,
-        toJSON value: Value,
+        toJSON value: some Encodable,
         expirationInSeconds expiration: Int
     ) -> EventLoopFuture<Void> {
         do {
@@ -130,9 +130,9 @@ extension RedisClient {
     ///     - expiration: The number of milliseconds after which to expire the key.
     /// - Returns: A `NIO.EventLoopFuture` that resolves if the operation was successful.
     @inlinable
-    public func psetex<Value: Encodable>(
+    public func psetex(
         _ key: RedisKey,
-        toJSON value: Value,
+        toJSON value: some Encodable,
         expirationInMilliseconds expiration: Int
     ) -> EventLoopFuture<Void> {
         do {

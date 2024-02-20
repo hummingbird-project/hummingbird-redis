@@ -53,7 +53,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
     ) async throws -> T {
         let redisService: HBRedisConnectionPoolService
         var additionalServices: [any Service] = []
-        if let redis = redis {
+        if let redis {
             redisService = redis
         } else {
             redisService = try HBRedisConnectionPoolService(
