@@ -24,7 +24,7 @@ public struct HBRedisPersistDriver: HBPersistDriver {
     }
 
     /// create new key with value. If key already exist throw `HBPersistError.duplicate` error
-    public func create<Object: Codable>(key: String, value: Object, expires: Duration?) async throws {
+    public func create(key: String, value: some Codable, expires: Duration?) async throws {
         let expiration: RedisSetCommandExpiration? = expires.map { .seconds(Int($0.components.seconds)) }
         let result = try await self.redisConnectionPool.set(.init(key), toJSON: value, onCondition: .keyDoesNotExist, expiration: expiration).get()
         switch result {
@@ -36,8 +36,8 @@ public struct HBRedisPersistDriver: HBPersistDriver {
     }
 
     /// set value for key. If value already exists overwrite it
-    public func set<Object: Codable>(key: String, value: Object, expires: Duration?) async throws {
-        if let expires = expires {
+    public func set(key: String, value: some Codable, expires: Duration?) async throws {
+        if let expires {
             let expiration = Int(expires.components.seconds)
             return try await self.redisConnectionPool.setex(.init(key), toJSON: value, expirationInSeconds: expiration).get()
         } else {

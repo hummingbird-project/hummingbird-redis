@@ -12,14 +12,12 @@ on:
     branches:
     - main
     - 2.x.x
-    paths:
-    - '**.swift'
-    - '**.yml'
   workflow_dispatch:
 
 jobs:
   linux:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       matrix:
         image:
@@ -39,7 +37,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     - name: Test
       run: |
         swift test --enable-code-coverage

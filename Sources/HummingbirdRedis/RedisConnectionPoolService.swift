@@ -36,7 +36,8 @@ public struct HBRedisConnectionPoolService: Service, @unchecked Sendable {
 
     @inlinable
     public func run() async throws {
-        await GracefulShutdownWaiter().wait()
+        /// Ignore cancellation error
+        try? await gracefulShutdown()
         try await self.close()
     }
 
