@@ -22,8 +22,8 @@ import HummingbirdRedis
 import NIOCore
 import RediStack
 
-/// Redis implementation of job queues
-public final class HBRedisJobQueue: HBJobQueue {
+/// Redis implementation of job queue driver
+public final class HBRedisQueue: HBJobQueueDriver {
     public struct JobID: Sendable, CustomStringConvertible {
         let id: String
 
@@ -92,15 +92,16 @@ public final class HBRedisJobQueue: HBJobQueue {
         try await self.initQueue(queueKey: self.configuration.failedQueueKey, onInit: self.configuration.failedJobsInitialization)
     }
 
-    /// Push Job onto queue
+    /// Push job onto queue
     /// - Parameters:
-    ///   - job: Job descriptor
-    /// - Returns: Queued job identifier
-    @discardableResult public func push(_ job: any HBJob) async throws -> JobID {
-        let id = JobID()
-        try await self.set(jobId: id, job: job)
-        _ = try await self.redisConnectionPool.lpush(id.redisKey, into: self.configuration.queueKey).get()
-        return id
+    ///   - job: Job
+    ///   - eventLoop: Eventloop to run process on (ignored in this case)
+    /// - Returns: Queued job
+    @discardableResult public func push(data: Data) async throws -> JobID {
+        let jobInstanceID = JobID()
+        try await self.set(jobId: jobInstanceID, data: data)
+        _ = try await self.redisConnectionPool.lpush(jobInstanceID.redisKey, into: self.configuration.queueKey).get()
+        return jobInstanceID
     }
 
     /// Flag job is done
@@ -142,8 +143,8 @@ public final class HBRedisJobQueue: HBJobQueue {
             throw RedisQueueError.unexpectedRedisKeyType
         }
         let identifier = JobID(key)
-        if let job = try await self.get(jobId: identifier) {
-            return .init(id: identifier, job: job)
+        if let data = try await self.get(jobId: identifier) {
+            return .init(id: identifier, jobData: data)
         } else {
             throw RedisQueueError.jobMissing(identifier)
         }
@@ -186,19 +187,12 @@ public final class HBRedisJobQueue: HBJobQueue {
         }
     }
 
-    func get(jobId: JobID) async throws -> HBJob? {
-        guard let data = try await self.redisConnectionPool.get(jobId.redisKey, as: Data.self).get() else {
-            return nil
-        }
-        do {
-            return try JSONDecoder().decode(HBAnyCodableJob.self, from: data).job
-        } catch {
-            throw JobQueueError.decodeJobFailed
-        }
+    func get(jobId: JobID) async throws -> Data? {
+        return try await self.redisConnectionPool.get(jobId.redisKey, as: Data.self).get()
     }
 
-    func set(jobId: JobID, job: HBJob) async throws {
-        return try await self.redisConnectionPool.set(jobId.redisKey, toJSON: HBAnyCodableJob(job)).get()
+    func set(jobId: JobID, data: Data) async throws {
+        return try await self.redisConnectionPool.set(jobId.redisKey, to: data).get()
     }
 
     func delete(jobId: JobID) async throws {
@@ -207,9 +201,9 @@ public final class HBRedisJobQueue: HBJobQueue {
 }
 
 /// extend HBRedisJobQueue to conform to AsyncSequence
-extension HBRedisJobQueue {
+extension HBRedisQueue {
     public struct AsyncIterator: AsyncIteratorProtocol {
-        let queue: HBRedisJobQueue
+        let queue: HBRedisQueue
 
         public func next() async throws -> Element? {
             while true {
