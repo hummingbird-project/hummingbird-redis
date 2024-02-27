@@ -48,24 +48,16 @@ final class HummingbirdRedisJobsTests: XCTestCase {
     /// Creates test client, runs test function abd ensures everything is
     /// shutdown correctly
     @discardableResult public func testJobQueue<T>(
-        redis: HBRedisConnectionPoolService? = nil,
         numWorkers: Int,
         failedJobsInitialization: HBRedisQueue.JobInitialization = .remove,
         test: (HBJobQueue<HBRedisQueue>) async throws -> T
     ) async throws -> T {
-        let redisService: HBRedisConnectionPoolService
-        var additionalServices: [any Service] = []
-        if let redis {
-            redisService = redis
-        } else {
-            redisService = try HBRedisConnectionPoolService(
-                .init(hostname: Self.redisHostname, port: 6379),
-                logger: Logger(label: "Redis")
-            )
-            additionalServices = [redisService]
-        }
-        var logger = Logger(label: "HummingbirdJobsTests")
-        logger.logLevel = .trace
+        var logger = Logger(label: "RedisJobsTests")
+        logger.logLevel = .debug
+        let redisService = try HBRedisConnectionPoolService(
+            .init(hostname: Self.redisHostname, port: 6379),
+            logger: logger
+        )
         let jobQueue = HBJobQueue(
             .redis(
                 redisService,
@@ -82,7 +74,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
         return try await withThrowingTaskGroup(of: Void.self) { group in
             let serviceGroup = ServiceGroup(
                 configuration: .init(
-                    services: additionalServices + [jobQueue],
+                    services: [redisService, jobQueue],
                     gracefulShutdownSignals: [.sigterm, .sigint],
                     logger: Logger(label: "JobQueueService")
                 )
@@ -201,29 +193,23 @@ final class HummingbirdRedisJobsTests: XCTestCase {
     func testShutdownJob() async throws {
         let jobIdentifer = HBJobIdentifier<Int>(#function)
         let expectation = XCTestExpectation(description: "TestJob.execute was called", expectedFulfillmentCount: 1)
-        let redis = try HBRedisConnectionPoolService(
-            .init(hostname: Self.redisHostname, port: 6379),
-            logger: Logger(label: "Redis")
-        )
         var logger = Logger(label: "HummingbirdJobsTests")
         logger.logLevel = .trace
-        let jobQueue = try await self.testJobQueue(redis: redis, numWorkers: 4) { jobQueue in
+
+        try await self.testJobQueue(numWorkers: 4) { jobQueue in
             jobQueue.registerJob(jobIdentifer) { _, _ in
                 expectation.fulfill()
                 try await Task.sleep(for: .milliseconds(1000))
             }
             try await jobQueue.push(id: jobIdentifer, parameters: 0)
             await self.wait(for: [expectation], timeout: 5)
-            return jobQueue
+
+            let pendingJobs = try await jobQueue.queue.redisConnectionPool.llen(of: jobQueue.queue.configuration.queueKey).get()
+            XCTAssertEqual(pendingJobs, 0)
+            let failedJobs = try await jobQueue.queue.redisConnectionPool.llen(of: jobQueue.queue.configuration.failedQueueKey).get()
+            let processingJobs = try await jobQueue.queue.redisConnectionPool.llen(of: jobQueue.queue.configuration.processingQueueKey).get()
+            XCTAssertEqual(failedJobs + processingJobs, 1)
         }
-
-        let pendingJobs = try await jobQueue.queue.redisConnectionPool.llen(of: jobQueue.queue.configuration.queueKey).get()
-        XCTAssertEqual(pendingJobs, 0)
-        let failedJobs = try await jobQueue.queue.redisConnectionPool.llen(of: jobQueue.queue.configuration.failedQueueKey).get()
-        let processingJobs = try await jobQueue.queue.redisConnectionPool.llen(of: jobQueue.queue.configuration.processingQueueKey).get()
-        XCTAssertEqual(failedJobs + processingJobs, 1)
-
-        try await redis.close()
     }
 
     /// test job fails to decode but queue continues to process
