@@ -92,10 +92,9 @@ public final class HBRedisQueue: HBJobQueueDriver {
         try await self.initQueue(queueKey: self.configuration.failedQueueKey, onInit: self.configuration.failedJobsInitialization)
     }
 
-    /// Push job onto queue
+    /// Push job data onto queue
     /// - Parameters:
-    ///   - job: Job
-    ///   - eventLoop: Eventloop to run process on (ignored in this case)
+    ///   - data: Job data
     /// - Returns: Queued job
     @discardableResult public func push(data: Data) async throws -> JobID {
         let jobInstanceID = JobID()
