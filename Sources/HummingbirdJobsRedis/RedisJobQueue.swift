@@ -73,7 +73,7 @@ public final class HBRedisQueue: HBJobQueueDriver {
 
     /// Initialize redis job queue
     /// - Parameters:
-    ///   - redisConnectionPoolGroup: Redis connection pool group
+    ///   - redisConnectionPoolService: Redis connection pool
     ///   - configuration: configuration
     public init(_ redisConnectionPoolService: HBRedisConnectionPoolService, configuration: Configuration = .init()) {
         self.redisConnectionPool = redisConnectionPoolService
@@ -221,5 +221,15 @@ extension HBRedisQueue {
 
     public func makeAsyncIterator() -> AsyncIterator {
         return .init(queue: self)
+    }
+}
+
+extension HBJobQueueDriver where Self == HBRedisQueue {
+    /// Return Redis driver for Job Queue
+    /// - Parameters:
+    ///   - redisConnectionPoolService: Redis connection pool
+    ///   - configuration: configuration
+    public static func redis(_ redisConnectionPoolService: HBRedisConnectionPoolService, configuration: HBRedisQueue.Configuration = .init()) -> Self {
+        .init(redisConnectionPoolService, configuration: configuration)
     }
 }

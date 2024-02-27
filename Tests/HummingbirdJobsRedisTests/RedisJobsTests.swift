@@ -67,7 +67,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
         var logger = Logger(label: "HummingbirdJobsTests")
         logger.logLevel = .trace
         let jobQueue = HBJobQueue(
-            HBRedisQueue(
+            .redis(
                 redisService,
                 configuration: .init(
                     pendingJobInitialization: .remove,
