@@ -17,7 +17,7 @@ import Hummingbird
 import HummingbirdJobs
 @testable import HummingbirdJobsRedis
 import HummingbirdRedis
-import HummingbirdXCT
+import HummingbirdTesting
 import Logging
 import NIOConcurrencyHelpers
 import RediStack
