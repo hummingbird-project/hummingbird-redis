@@ -15,23 +15,38 @@
 import NIOCore
 import RediStack
 
-extension HBRedisJobQueue {
+extension HBRedisQueue {
+    /// what to do with failed/processing jobs from last time queue was handled
+    public enum JobInitialization: Sendable {
+        case doNothing
+        case rerun
+        case remove
+    }
+
     /// Redis Job queue configuration
     public struct Configuration: Sendable {
         let queueKey: RedisKey
         let processingQueueKey: RedisKey
-        let rerunProcessing: Bool
-        let pollTime: TimeAmount
+        let failedQueueKey: RedisKey
+        let pendingJobInitialization: JobInitialization
+        let processingJobsInitialization: JobInitialization
+        let failedJobsInitialization: JobInitialization
+        let pollTime: Duration
 
         public init(
             queueKey: String = "_hbJobQueue",
-            pollTime: TimeAmount = .milliseconds(100),
-            rerunProcessing: Bool = true
+            pollTime: Duration = .milliseconds(100),
+            pendingJobInitialization: JobInitialization = .doNothing,
+            processingJobsInitialization: JobInitialization = .rerun,
+            failedJobsInitialization: JobInitialization = .doNothing
         ) {
             self.queueKey = RedisKey(queueKey)
             self.processingQueueKey = RedisKey("\(queueKey)Processing")
+            self.failedQueueKey = RedisKey("\(queueKey)Failed")
             self.pollTime = pollTime
-            self.rerunProcessing = rerunProcessing
+            self.pendingJobInitialization = pendingJobInitialization
+            self.processingJobsInitialization = processingJobsInitialization
+            self.failedJobsInitialization = failedJobsInitialization
         }
     }
 }

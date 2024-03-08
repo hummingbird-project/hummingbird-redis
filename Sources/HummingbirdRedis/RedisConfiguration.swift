@@ -12,12 +12,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-// This is almost a wholesale copy of the Vapor redis configuration that can be found
+// Based of the Vapor redis configuration that can be found
 // here https://github.com/vapor/redis/blob/master/Sources/Redis/RedisConfiguration.swift
 import struct Foundation.URL
-import struct Logging.Logger
-import enum NIO.SocketAddress
-import struct NIO.TimeAmount
+import Hummingbird
+import Logging
+import NIOCore
 import RediStack
 
 public struct HBRedisConfiguration {
@@ -103,21 +103,24 @@ public struct HBRedisConfiguration {
 }
 
 extension RedisConnectionPool.Configuration {
-    internal init(_ config: HBRedisConfiguration, defaultLogger: Logger) {
+    init(
+        _ config: HBRedisConfiguration,
+        logger: Logger
+    ) {
         self.init(
             initialServerConnectionAddresses: config.serverAddresses,
             maximumConnectionCount: config.pool.maximumConnectionCount,
             connectionFactoryConfiguration: .init(
                 connectionInitialDatabase: config.database,
                 connectionPassword: config.password,
-                connectionDefaultLogger: defaultLogger,
+                connectionDefaultLogger: logger,
                 tcpClient: nil
             ),
             minimumConnectionCount: config.pool.minimumConnectionCount,
             connectionBackoffFactor: config.pool.connectionBackoffFactor,
             initialConnectionBackoffDelay: config.pool.initialConnectionBackoffDelay,
             connectionRetryTimeout: config.pool.connectionRetryTimeout,
-            poolDefaultLogger: defaultLogger
+            poolDefaultLogger: logger
         )
     }
 }

@@ -12,17 +12,50 @@
 //
 //===----------------------------------------------------------------------===//
 
+import Atomics
+import struct Foundation.Data
+import class Foundation.JSONDecoder
+import struct Foundation.UUID
 import Hummingbird
 import HummingbirdJobs
 import HummingbirdRedis
 import NIOCore
 import RediStack
 
-/// Redis implementation of job queues
-public final class HBRedisJobQueue: HBJobQueue {
+/// Redis implementation of job queue driver
+public final class HBRedisQueue: HBJobQueueDriver {
+    public struct JobID: Sendable, CustomStringConvertible {
+        let id: String
+
+        public init() {
+            self.id = UUID().uuidString
+        }
+
+        /// Initialize JobID from String
+        /// - Parameter value: string value
+        public init(_ value: String) {
+            self.id = value
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            self.id = try container.decode(String.self)
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
+            try container.encode(self.id)
+        }
+
+        var redisKey: RedisKey { .init(self.description) }
+
+        /// String description of Identifier
+        public var description: String { self.id }
+    }
+
     public enum RedisQueueError: Error, CustomStringConvertible {
         case unexpectedRedisKeyType
-        case jobMissing(JobIdentifier)
+        case jobMissing(JobID)
 
         public var description: String {
             switch self {
@@ -34,78 +67,40 @@ public final class HBRedisJobQueue: HBJobQueue {
         }
     }
 
-    let redisConnectionPoolGroup: RedisConnectionPoolGroup
+    let redisConnectionPool: HBRedisConnectionPoolService
     let configuration: Configuration
-    public var pollTime: TimeAmount { self.configuration.pollTime }
+    let isStopped: ManagedAtomic<Bool>
 
     /// Initialize redis job queue
     /// - Parameters:
-    ///   - application: application to get redis setup from
+    ///   - redisConnectionPoolService: Redis connection pool
     ///   - configuration: configuration
-    public init(_ application: HBApplication, configuration: Configuration) {
-        self.redisConnectionPoolGroup = application.redis
+    public init(_ redisConnectionPoolService: HBRedisConnectionPoolService, configuration: Configuration = .init()) {
+        self.redisConnectionPool = redisConnectionPoolService
         self.configuration = configuration
-    }
-
-    /// Initialize redis job queue
-    /// - Parameters:
-    ///   - redisConnectionPoolGroup: Redis connection pool group
-    ///   - configuration: configuration
-    public init(_ redisConnectionPoolGroup: RedisConnectionPoolGroup, configuration: Configuration) {
-        self.redisConnectionPoolGroup = redisConnectionPoolGroup
-        self.configuration = configuration
+        self.isStopped = .init(false)
     }
 
     /// This is run at initialization time.
     ///
     /// Will push all the jobs in the processing queue back onto to the main queue so they can
     /// be rerun
-    /// - Parameter eventLoop: eventLoop to run process on
-    public func onInit(on eventLoop: EventLoop) -> EventLoopFuture<Void> {
-        if self.configuration.rerunProcessing {
-            return self.rerunProcessing(on: eventLoop)
-        } else {
-            return eventLoop.makeSucceededVoidFuture()
-        }
+    public func onInit() async throws {
+        try await self.initQueue(queueKey: self.configuration.queueKey, onInit: self.configuration.pendingJobInitialization)
+        // there shouldn't be any on the processing list, but if there are we should do something with them
+        try await self.initQueue(queueKey: self.configuration.processingQueueKey, onInit: self.configuration.processingJobsInitialization)
+        try await self.initQueue(queueKey: self.configuration.failedQueueKey, onInit: self.configuration.failedJobsInitialization)
     }
 
-    /// Push Job onto queue
+    /// Push job data onto queue
     /// - Parameters:
-    ///   - job: Job descriptor
-    ///   - eventLoop: eventLoop to do work on
+    ///   - data: Job data
     /// - Returns: Queued job
-    public func push(_ job: HBJob, on eventLoop: EventLoop) -> EventLoopFuture<HBQueuedJob> {
-        let pool = self.redisConnectionPoolGroup.pool(for: eventLoop)
-        let queuedJob = HBQueuedJob(job)
-        return self.set(jobId: queuedJob.id, job: queuedJob.job, pool: pool)
-            .flatMap {
-                pool.lpush(queuedJob.id.redisKey, into: self.configuration.queueKey)
-            }
-            .map { _ in
-                return queuedJob
-            }
-    }
-
-    /// Pop Job off queue
-    /// - Parameter eventLoop: eventLoop to do work on
-    /// - Returns: queued job
-    public func pop(on eventLoop: EventLoop) -> EventLoopFuture<HBQueuedJob?> {
-        let pool = self.redisConnectionPoolGroup.pool(for: eventLoop)
-        return pool.rpoplpush(from: self.configuration.queueKey, to: self.configuration.processingQueueKey)
-            .flatMap { key -> EventLoopFuture<HBQueuedJob?> in
-                if key.isNull {
-                    return eventLoop.makeSucceededFuture(nil)
-                }
-                guard let key = String(fromRESP: key) else {
-                    return eventLoop.makeFailedFuture(RedisQueueError.unexpectedRedisKeyType)
-                }
-                let identifier = JobIdentifier(fromKey: key)
-                return self.get(jobId: identifier, pool: pool)
-                    .unwrap(orError: RedisQueueError.jobMissing(identifier))
-                    .map { job in
-                        return .init(id: identifier, job: job)
-                    }
-            }
+    @discardableResult public func push(_ buffer: ByteBuffer) async throws -> JobID {
+        let jobInstanceID = JobID()
+        try await self.set(jobId: jobInstanceID, buffer: buffer)
+        _ = try await self.redisConnectionPool.lpush(jobInstanceID.redisKey, into: self.configuration.queueKey).get()
+        return jobInstanceID
     }
 
     /// Flag job is done
@@ -113,82 +108,140 @@ public final class HBRedisJobQueue: HBJobQueue {
     /// Removes  job id from processing queue
     /// - Parameters:
     ///   - jobId: Job id
-    ///   - eventLoop: eventLoop to do work on
-    public func finished(jobId: JobIdentifier, on eventLoop: EventLoop) -> EventLoopFuture<Void> {
-        let pool = self.redisConnectionPoolGroup.pool(for: eventLoop)
-        return pool.lrem(jobId.description, from: self.configuration.processingQueueKey, count: 0)
-            .flatMap { _ in
-                return self.delete(jobId: jobId, pool: pool)
-            }
+    public func finished(jobId: JobID) async throws {
+        _ = try await self.redisConnectionPool.lrem(jobId.description, from: self.configuration.processingQueueKey, count: 0).get()
+        try await self.delete(jobId: jobId)
     }
 
-    /// Push all the entries on the processing list back onto the main list.
+    /// Flag job failed to process
     ///
-    /// This is run at initialization. If a job is in the processing queue at initialization it never was completed the
-    /// last time queues were processed so needs to be re run
-    public func rerunProcessing(on eventLoop: EventLoop) -> EventLoopFuture<Void> {
-        let promise = eventLoop.makePromise(of: Void.self)
-        let pool = self.redisConnectionPoolGroup.pool(for: eventLoop)
-        func _moveOneEntry() {
-            pool.rpoplpush(from: self.configuration.processingQueueKey, to: self.configuration.queueKey)
-                .whenComplete { result in
-                    switch result {
-                    case .success(let key):
-                        if key.isNull {
-                            promise.succeed(())
-                        } else {
-                            _moveOneEntry()
-                        }
-                    case .failure(let error):
-                        promise.fail(error)
-                    }
-                }
+    /// Removes  job id from processing queue, adds to failed queue
+    /// - Parameters:
+    ///   - jobId: Job id
+    public func failed(jobId: JobID, error: Error) async throws {
+        _ = try await self.redisConnectionPool.lrem(jobId.redisKey, from: self.configuration.processingQueueKey, count: 0).get()
+        _ = try await self.redisConnectionPool.lpush(jobId.redisKey, into: self.configuration.failedQueueKey).get()
+    }
+
+    public func stop() async {
+        self.isStopped.store(true, ordering: .relaxed)
+    }
+
+    public func shutdownGracefully() async {}
+
+    /// Pop Job off queue and add to pending queue
+    /// - Parameter eventLoop: eventLoop to do work on
+    /// - Returns: queued job
+    func popFirst() async throws -> HBQueuedJob<JobID>? {
+        let pool = self.redisConnectionPool.pool
+        let key = try await pool.rpoplpush(from: self.configuration.queueKey, to: self.configuration.processingQueueKey).get()
+        guard !key.isNull else {
+            return nil
         }
-        _moveOneEntry()
-        return promise.futureResult
-    }
-
-    func get(jobId: JobIdentifier, pool: RedisConnectionPool) -> EventLoopFuture<HBJobContainer?> {
-        return pool.get(jobId.redisKey, asJSON: HBJobContainer.self)
-    }
-
-    func set(jobId: JobIdentifier, job: HBJobContainer, pool: RedisConnectionPool) -> EventLoopFuture<Void> {
-        return pool.set(jobId.redisKey, toJSON: job)
-    }
-
-    func delete(jobId: JobIdentifier, pool: RedisConnectionPool) -> EventLoopFuture<Void> {
-        return pool.delete(jobId.redisKey).map { _ in }
-    }
-}
-
-extension HBJobQueueFactory {
-    /// Redis Job queue driver
-    public static func redis(
-        configuration: HBRedisJobQueue.Configuration = .init()
-    ) -> HBJobQueueFactory {
-        .init { app in
-            return HBRedisJobQueue(app.redis, configuration: configuration)
+        guard let key = String(fromRESP: key) else {
+            throw RedisQueueError.unexpectedRedisKeyType
+        }
+        let identifier = JobID(key)
+        if let buffer = try await self.get(jobId: identifier) {
+            return .init(id: identifier, jobBuffer: buffer)
+        } else {
+            throw RedisQueueError.jobMissing(identifier)
         }
     }
 
-    /// Redis Job queue drive
-    public static func redis(
-        id: RedisConnectionPoolGroupIdentifier,
-        configuration: HBRedisJobQueue.Configuration = .init()
-    ) -> HBJobQueueFactory {
-        .init { app in
-            guard let connectionPool = app.redisConnectionPools[id] else {
-                preconditionFailure("Redis Connection Pool Group id: \(id) does not exist")
+    /// What to do with queue at initialization
+    func initQueue(queueKey: RedisKey, onInit: JobInitialization) async throws {
+        switch onInit {
+        case .remove:
+            try await self.remove(queueKey: queueKey)
+        case .rerun:
+            try await self.rerun(queueKey: queueKey)
+        case .doNothing:
+            break
+        }
+    }
+
+    /// Push all the entries from list back onto the main list.
+    func rerun(queueKey: RedisKey) async throws {
+        while true {
+            let key = try await self.redisConnectionPool.rpoplpush(from: queueKey, to: self.configuration.queueKey).get()
+            if key.isNull {
+                return
             }
-            return HBRedisJobQueue(connectionPool, configuration: configuration)
         }
+    }
+
+    /// Push all the entries from list back onto the main list.
+    func remove(queueKey: RedisKey) async throws {
+        while true {
+            let key = try await self.redisConnectionPool.rpop(from: queueKey).get()
+            if key.isNull {
+                break
+            }
+            guard let key = String(fromRESP: key) else {
+                throw RedisQueueError.unexpectedRedisKeyType
+            }
+            let identifier = JobID(key)
+            try await self.delete(jobId: identifier)
+        }
+    }
+
+    func get(jobId: JobID) async throws -> ByteBuffer? {
+        return try await self.redisConnectionPool.get(jobId.redisKey).get().byteBuffer
+    }
+
+    func set(jobId: JobID, buffer: ByteBuffer) async throws {
+        return try await self.redisConnectionPool.set(jobId.redisKey, to: buffer).get()
+    }
+
+    func delete(jobId: JobID) async throws {
+        _ = try await self.redisConnectionPool.delete(jobId.redisKey).get()
     }
 }
 
-extension JobIdentifier {
-    var redisKey: RedisKey { .init(self.description) }
+/// extend HBRedisJobQueue to conform to AsyncSequence
+extension HBRedisQueue {
+    public struct AsyncIterator: AsyncIteratorProtocol {
+        let queue: HBRedisQueue
 
-    init(fromKey key: String) {
-        self.init(key)
+        public func next() async throws -> Element? {
+            while true {
+                if self.queue.isStopped.load(ordering: .relaxed) {
+                    return nil
+                }
+                if let job = try await queue.popFirst() {
+                    return job
+                }
+                // we only sleep if we didn't receive a job
+                try await Task.sleep(for: self.queue.configuration.pollTime)
+            }
+        }
+    }
+
+    public func makeAsyncIterator() -> AsyncIterator {
+        return .init(queue: self)
+    }
+}
+
+extension HBJobQueueDriver where Self == HBRedisQueue {
+    /// Return Redis driver for Job Queue
+    /// - Parameters:
+    ///   - redisConnectionPoolService: Redis connection pool
+    ///   - configuration: configuration
+    public static func redis(_ redisConnectionPoolService: HBRedisConnectionPoolService, configuration: HBRedisQueue.Configuration = .init()) -> Self {
+        .init(redisConnectionPoolService, configuration: configuration)
+    }
+}
+
+// Extend ByteBuffer so that is conforms to `RESPValueConvertible`. Really not sure why
+// this isnt available already
+extension ByteBuffer: RESPValueConvertible {
+    public init?(fromRESP value: RESPValue) {
+        guard let buffer = value.byteBuffer else { return nil }
+        self = buffer
+    }
+
+    public func convertedToRESPValue() -> RESPValue {
+        return .bulkString(self)
     }
 }
