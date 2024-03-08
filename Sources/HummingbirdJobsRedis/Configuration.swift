@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import NIOCore
-import RediStack
+@preconcurrency import RediStack
 
 extension HBRedisQueue {
     /// what to do with failed/processing jobs from last time queue was handled
@@ -50,5 +50,3 @@ extension HBRedisQueue {
         }
     }
 }
-
-extension RedisKey: @unchecked Sendable {}

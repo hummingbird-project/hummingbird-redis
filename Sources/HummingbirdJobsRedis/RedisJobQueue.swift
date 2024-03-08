@@ -201,7 +201,9 @@ public final class HBRedisQueue: HBJobQueueDriver {
 
 /// extend HBRedisJobQueue to conform to AsyncSequence
 extension HBRedisQueue {
+    public typealias Element = HBQueuedJob<JobID>
     public struct AsyncIterator: AsyncIteratorProtocol {
+
         let queue: HBRedisQueue
 
         public func next() async throws -> Element? {
@@ -235,7 +237,12 @@ extension HBJobQueueDriver where Self == HBRedisQueue {
 
 // Extend ByteBuffer so that is conforms to `RESPValueConvertible`. Really not sure why
 // this isnt available already
-extension ByteBuffer: RESPValueConvertible {
+#if compiler(>=6.0)
+extension ByteBuffer: @retroactive RESPValueConvertible {}
+#else
+extension ByteBuffer: RESPValueConvertible {}
+#endif
+extension ByteBuffer{
     public init?(fromRESP value: RESPValue) {
         guard let buffer = value.byteBuffer else { return nil }
         self = buffer
