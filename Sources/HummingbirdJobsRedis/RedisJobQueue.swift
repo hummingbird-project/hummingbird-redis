@@ -22,8 +22,8 @@ import HummingbirdRedis
 import NIOCore
 import RediStack
 
-/// Redis implementation of job queues
-public final class HBRedisJobQueue: HBJobQueue {
+/// Redis implementation of job queue driver
+public final class HBRedisQueue: HBJobQueueDriver {
     public struct JobID: Sendable, CustomStringConvertible {
         let id: String
 
@@ -73,7 +73,7 @@ public final class HBRedisJobQueue: HBJobQueue {
 
     /// Initialize redis job queue
     /// - Parameters:
-    ///   - redisConnectionPoolGroup: Redis connection pool group
+    ///   - redisConnectionPoolService: Redis connection pool
     ///   - configuration: configuration
     public init(_ redisConnectionPoolService: HBRedisConnectionPoolService, configuration: Configuration = .init()) {
         self.redisConnectionPool = redisConnectionPoolService
@@ -92,15 +92,15 @@ public final class HBRedisJobQueue: HBJobQueue {
         try await self.initQueue(queueKey: self.configuration.failedQueueKey, onInit: self.configuration.failedJobsInitialization)
     }
 
-    /// Push Job onto queue
+    /// Push job data onto queue
     /// - Parameters:
-    ///   - job: Job descriptor
-    /// - Returns: Queued job identifier
-    @discardableResult public func push(_ job: any HBJob) async throws -> JobID {
-        let id = JobID()
-        try await self.set(jobId: id, job: job)
-        _ = try await self.redisConnectionPool.lpush(id.redisKey, into: self.configuration.queueKey).get()
-        return id
+    ///   - data: Job data
+    /// - Returns: Queued job
+    @discardableResult public func push(_ buffer: ByteBuffer) async throws -> JobID {
+        let jobInstanceID = JobID()
+        try await self.set(jobId: jobInstanceID, buffer: buffer)
+        _ = try await self.redisConnectionPool.lpush(jobInstanceID.redisKey, into: self.configuration.queueKey).get()
+        return jobInstanceID
     }
 
     /// Flag job is done
@@ -142,8 +142,8 @@ public final class HBRedisJobQueue: HBJobQueue {
             throw RedisQueueError.unexpectedRedisKeyType
         }
         let identifier = JobID(key)
-        if let job = try await self.get(jobId: identifier) {
-            return .init(id: identifier, job: job)
+        if let buffer = try await self.get(jobId: identifier) {
+            return .init(id: identifier, jobBuffer: buffer)
         } else {
             throw RedisQueueError.jobMissing(identifier)
         }
@@ -186,19 +186,12 @@ public final class HBRedisJobQueue: HBJobQueue {
         }
     }
 
-    func get(jobId: JobID) async throws -> HBJob? {
-        guard let data = try await self.redisConnectionPool.get(jobId.redisKey, as: Data.self).get() else {
-            return nil
-        }
-        do {
-            return try JSONDecoder().decode(HBAnyCodableJob.self, from: data).job
-        } catch {
-            throw JobQueueError.decodeJobFailed
-        }
+    func get(jobId: JobID) async throws -> ByteBuffer? {
+        return try await self.redisConnectionPool.get(jobId.redisKey).get().byteBuffer
     }
 
-    func set(jobId: JobID, job: HBJob) async throws {
-        return try await self.redisConnectionPool.set(jobId.redisKey, toJSON: HBAnyCodableJob(job)).get()
+    func set(jobId: JobID, buffer: ByteBuffer) async throws {
+        return try await self.redisConnectionPool.set(jobId.redisKey, to: buffer).get()
     }
 
     func delete(jobId: JobID) async throws {
@@ -207,9 +200,9 @@ public final class HBRedisJobQueue: HBJobQueue {
 }
 
 /// extend HBRedisJobQueue to conform to AsyncSequence
-extension HBRedisJobQueue {
+extension HBRedisQueue {
     public struct AsyncIterator: AsyncIteratorProtocol {
-        let queue: HBRedisJobQueue
+        let queue: HBRedisQueue
 
         public func next() async throws -> Element? {
             while true {
@@ -227,5 +220,28 @@ extension HBRedisJobQueue {
 
     public func makeAsyncIterator() -> AsyncIterator {
         return .init(queue: self)
+    }
+}
+
+extension HBJobQueueDriver where Self == HBRedisQueue {
+    /// Return Redis driver for Job Queue
+    /// - Parameters:
+    ///   - redisConnectionPoolService: Redis connection pool
+    ///   - configuration: configuration
+    public static func redis(_ redisConnectionPoolService: HBRedisConnectionPoolService, configuration: HBRedisQueue.Configuration = .init()) -> Self {
+        .init(redisConnectionPoolService, configuration: configuration)
+    }
+}
+
+// Extend ByteBuffer so that is conforms to `RESPValueConvertible`. Really not sure why
+// this isnt available already
+extension ByteBuffer: RESPValueConvertible {
+    public init?(fromRESP value: RESPValue) {
+        guard let buffer = value.byteBuffer else { return nil }
+        self = buffer
+    }
+
+    public func convertedToRESPValue() -> RESPValue {
+        return .bulkString(self)
     }
 }
