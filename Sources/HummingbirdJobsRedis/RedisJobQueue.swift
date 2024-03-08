@@ -203,7 +203,6 @@ public final class HBRedisQueue: HBJobQueueDriver {
 extension HBRedisQueue {
     public typealias Element = HBQueuedJob<JobID>
     public struct AsyncIterator: AsyncIteratorProtocol {
-
         let queue: HBRedisQueue
 
         public func next() async throws -> Element? {
@@ -242,7 +241,7 @@ extension ByteBuffer: @retroactive RESPValueConvertible {}
 #else
 extension ByteBuffer: RESPValueConvertible {}
 #endif
-extension ByteBuffer{
+extension ByteBuffer {
     public init?(fromRESP value: RESPValue) {
         guard let buffer = value.byteBuffer else { return nil }
         self = buffer
