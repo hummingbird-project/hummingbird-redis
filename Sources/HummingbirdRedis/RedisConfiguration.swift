@@ -20,7 +20,7 @@ import Logging
 import NIOCore
 import RediStack
 
-public struct HBRedisConfiguration {
+public struct RedisConfiguration {
     public typealias ValidationError = RedisConnection.Configuration.ValidationError
 
     public var serverAddresses: [SocketAddress]
@@ -104,7 +104,7 @@ public struct HBRedisConfiguration {
 
 extension RedisConnectionPool.Configuration {
     init(
-        _ config: HBRedisConfiguration,
+        _ config: RedisConfiguration,
         logger: Logger
     ) {
         self.init(

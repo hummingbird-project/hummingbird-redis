@@ -20,15 +20,15 @@ import RediStack
 import XCTest
 
 final class PersistTests: XCTestCase {
-    static let redisHostname = HBEnvironment.shared.get("REDIS_HOSTNAME") ?? "localhost"
+    static let redisHostname = Environment.shared.get("REDIS_HOSTNAME") ?? "localhost"
 
-    func createApplication(_ updateRouter: (HBRouter<HBBasicRequestContext>, HBPersistDriver) -> Void = { _, _ in }) throws -> some HBApplicationProtocol {
-        let router = HBRouter()
-        let redisConnectionPool = try HBRedisConnectionPoolService(
+    func createApplication(_ updateRouter: (Router<BasicRequestContext>, PersistDriver) -> Void = { _, _ in }) throws -> some ApplicationProtocol {
+        let router = Router()
+        let redisConnectionPool = try RedisConnectionPoolService(
             .init(hostname: Self.redisHostname, port: 6379),
             logger: Logger(label: "Redis")
         )
-        let persist = HBRedisPersistDriver(redisConnectionPoolService: redisConnectionPool)
+        let persist = RedisPersistDriver(redisConnectionPoolService: redisConnectionPool)
 
         router.put("/persist/:tag") { request, context -> HTTPResponse.Status in
             let buffer = try await request.body.collect(upTo: .max)
@@ -37,23 +37,23 @@ final class PersistTests: XCTestCase {
             return .ok
         }
         router.put("/persist/:tag/:time") { request, context -> HTTPResponse.Status in
-            guard let time = context.parameters.get("time", as: Int.self) else { throw HBHTTPError(.badRequest) }
+            guard let time = context.parameters.get("time", as: Int.self) else { throw HTTPError(.badRequest) }
             let buffer = try await request.body.collect(upTo: .max)
             let tag = try context.parameters.require("tag")
             try await persist.set(key: tag, value: String(buffer: buffer), expires: .seconds(time))
             return .ok
         }
         router.get("/persist/:tag") { _, context -> String? in
-            guard let tag = context.parameters.get("tag", as: String.self) else { throw HBHTTPError(.badRequest) }
+            guard let tag = context.parameters.get("tag", as: String.self) else { throw HTTPError(.badRequest) }
             return try await persist.get(key: tag, as: String.self)
         }
         router.delete("/persist/:tag") { _, context -> HTTPResponse.Status in
-            guard let tag = context.parameters.get("tag", as: String.self) else { throw HBHTTPError(.badRequest) }
+            guard let tag = context.parameters.get("tag", as: String.self) else { throw HTTPError(.badRequest) }
             try await persist.remove(key: tag)
             return .noContent
         }
         updateRouter(router, persist)
-        var app = HBApplication(responder: router.buildResponder())
+        var app = Application(responder: router.buildResponder())
         app.addServices(redisConnectionPool, persist)
 
         return app
@@ -97,8 +97,8 @@ final class PersistTests: XCTestCase {
                 let tag = try context.parameters.require("tag")
                 do {
                     try await persist.create(key: tag, value: String(buffer: buffer))
-                } catch let error as HBPersistError where error == .duplicate {
-                    throw HBHTTPError(.conflict)
+                } catch let error as PersistError where error == .duplicate {
+                    throw HTTPError(.conflict)
                 }
                 return .ok
             }
@@ -156,13 +156,13 @@ final class PersistTests: XCTestCase {
         }
         let app = try self.createApplication { router, persist in
             router.put("/codable/:tag") { request, context -> HTTPResponse.Status in
-                guard let tag = context.parameters.get("tag") else { throw HBHTTPError(.badRequest) }
+                guard let tag = context.parameters.get("tag") else { throw HTTPError(.badRequest) }
                 let buffer = try await request.body.collect(upTo: .max)
                 try await persist.set(key: tag, value: TestCodable(buffer: String(buffer: buffer)))
                 return .ok
             }
             router.get("/codable/:tag") { _, context -> String? in
-                guard let tag = context.parameters.get("tag") else { throw HBHTTPError(.badRequest) }
+                guard let tag = context.parameters.get("tag") else { throw HTTPError(.badRequest) }
                 let value = try await persist.get(key: tag, as: TestCodable.self)
                 return value?.buffer
             }
