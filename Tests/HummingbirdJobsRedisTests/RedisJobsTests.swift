@@ -92,7 +92,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
         let expectation = XCTestExpectation(description: "TestJob.execute was called", expectedFulfillmentCount: 10)
         let jobIdentifer = JobIdentifier<Int>(#function)
         try await self.testJobQueue(numWorkers: 1) { jobQueue in
-            jobQueue.registerJob(jobIdentifer) { parameters, context in
+            jobQueue.registerJob(id: jobIdentifer) { parameters, context in
                 context.logger.info("Parameters=\(parameters)")
                 try await Task.sleep(for: .milliseconds(Int.random(in: 10..<50)))
                 expectation.fulfill()
@@ -119,7 +119,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
         let expectation = XCTestExpectation(description: "TestJob.execute was called", expectedFulfillmentCount: 10)
 
         try await self.testJobQueue(numWorkers: 4) { jobQueue in
-            jobQueue.registerJob(jobIdentifer) { parameters, context in
+            jobQueue.registerJob(id: jobIdentifer) { parameters, context in
                 let runningJobs = runningJobCounter.wrappingIncrementThenLoad(by: 1, ordering: .relaxed)
                 if runningJobs > maxRunningJobCounter.load(ordering: .relaxed) {
                     maxRunningJobCounter.store(runningJobs, ordering: .relaxed)
@@ -153,7 +153,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
         let expectation = XCTestExpectation(description: "TestJob.execute was called", expectedFulfillmentCount: 4)
         struct FailedError: Error {}
         try await self.testJobQueue(numWorkers: 1) { jobQueue in
-            jobQueue.registerJob(jobIdentifer, maxRetryCount: 3) { _, _ in
+            jobQueue.registerJob(id: jobIdentifer, maxRetryCount: 3) { _, _ in
                 expectation.fulfill()
                 throw FailedError()
             }
@@ -178,7 +178,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
         let expectation = XCTestExpectation(description: "TestJob.execute was called")
         let jobIdentifer = JobIdentifier<TestJobParameters>(#function)
         try await self.testJobQueue(numWorkers: 1) { jobQueue in
-            jobQueue.registerJob(jobIdentifer) { parameters, _ in
+            jobQueue.registerJob(id: jobIdentifer) { parameters, _ in
                 XCTAssertEqual(parameters.id, 23)
                 XCTAssertEqual(parameters.message, "Hello!")
                 expectation.fulfill()
@@ -197,7 +197,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
         logger.logLevel = .trace
 
         try await self.testJobQueue(numWorkers: 4) { jobQueue in
-            jobQueue.registerJob(jobIdentifer) { _, _ in
+            jobQueue.registerJob(id: jobIdentifer) { _, _ in
                 expectation.fulfill()
                 try await Task.sleep(for: .milliseconds(1000))
             }
@@ -220,7 +220,7 @@ final class HummingbirdRedisJobsTests: XCTestCase {
         let expectation = XCTestExpectation(description: "job was called", expectedFulfillmentCount: 1)
 
         try await self.testJobQueue(numWorkers: 4) { jobQueue in
-            jobQueue.registerJob(jobIdentifer2) { parameters, _ in
+            jobQueue.registerJob(id: jobIdentifer2) { parameters, _ in
                 string.withLockedValue { $0 = parameters }
                 expectation.fulfill()
             }
