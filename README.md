@@ -7,7 +7,7 @@ This is the Hummingbird interface to [RediStack library](https://gitlab.com/mord
 ## Usage
 
 ```swift
-let app = HBApplication()
+let app = Application()
 try app.addRedis(configuration: .init(hostname: "localhost", port: 6379))
 app.router.get("redis") { request in
     request.redis.send(command: "INFO").map {

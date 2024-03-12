@@ -23,7 +23,7 @@ import NIOCore
 import RediStack
 
 /// Redis implementation of job queue driver
-public final class HBRedisQueue: HBJobQueueDriver {
+public final class RedisQueue: JobQueueDriver {
     public struct JobID: Sendable, CustomStringConvertible {
         let id: String
 
@@ -67,7 +67,7 @@ public final class HBRedisQueue: HBJobQueueDriver {
         }
     }
 
-    let redisConnectionPool: HBRedisConnectionPoolService
+    let redisConnectionPool: RedisConnectionPoolService
     let configuration: Configuration
     let isStopped: ManagedAtomic<Bool>
 
@@ -75,7 +75,7 @@ public final class HBRedisQueue: HBJobQueueDriver {
     /// - Parameters:
     ///   - redisConnectionPoolService: Redis connection pool
     ///   - configuration: configuration
-    public init(_ redisConnectionPoolService: HBRedisConnectionPoolService, configuration: Configuration = .init()) {
+    public init(_ redisConnectionPoolService: RedisConnectionPoolService, configuration: Configuration = .init()) {
         self.redisConnectionPool = redisConnectionPoolService
         self.configuration = configuration
         self.isStopped = .init(false)
@@ -132,7 +132,7 @@ public final class HBRedisQueue: HBJobQueueDriver {
     /// Pop Job off queue and add to pending queue
     /// - Parameter eventLoop: eventLoop to do work on
     /// - Returns: queued job
-    func popFirst() async throws -> HBQueuedJob<JobID>? {
+    func popFirst() async throws -> QueuedJob<JobID>? {
         let pool = self.redisConnectionPool.pool
         let key = try await pool.rpoplpush(from: self.configuration.queueKey, to: self.configuration.processingQueueKey).get()
         guard !key.isNull else {
@@ -199,11 +199,11 @@ public final class HBRedisQueue: HBJobQueueDriver {
     }
 }
 
-/// extend HBRedisJobQueue to conform to AsyncSequence
-extension HBRedisQueue {
-    public typealias Element = HBQueuedJob<JobID>
+/// extend RedisJobQueue to conform to AsyncSequence
+extension RedisQueue {
+    public typealias Element = QueuedJob<JobID>
     public struct AsyncIterator: AsyncIteratorProtocol {
-        let queue: HBRedisQueue
+        let queue: RedisQueue
 
         public func next() async throws -> Element? {
             while true {
@@ -224,12 +224,12 @@ extension HBRedisQueue {
     }
 }
 
-extension HBJobQueueDriver where Self == HBRedisQueue {
+extension JobQueueDriver where Self == RedisQueue {
     /// Return Redis driver for Job Queue
     /// - Parameters:
     ///   - redisConnectionPoolService: Redis connection pool
     ///   - configuration: configuration
-    public static func redis(_ redisConnectionPoolService: HBRedisConnectionPoolService, configuration: HBRedisQueue.Configuration = .init()) -> Self {
+    public static func redis(_ redisConnectionPoolService: RedisConnectionPoolService, configuration: RedisQueue.Configuration = .init()) -> Self {
         .init(redisConnectionPoolService, configuration: configuration)
     }
 }

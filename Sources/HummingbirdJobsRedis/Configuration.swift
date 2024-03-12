@@ -15,7 +15,7 @@
 import NIOCore
 @preconcurrency import RediStack
 
-extension HBRedisQueue {
+extension RedisQueue {
     /// what to do with failed/processing jobs from last time queue was handled
     public enum JobInitialization: Sendable {
         case doNothing

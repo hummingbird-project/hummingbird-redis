@@ -16,14 +16,14 @@ import Hummingbird
 import RediStack
 
 /// Redis driver for persist system for storing persistent cross request key/value pairs
-public struct HBRedisPersistDriver: HBPersistDriver {
-    let redisConnectionPool: HBRedisConnectionPoolService
+public struct RedisPersistDriver: PersistDriver {
+    let redisConnectionPool: RedisConnectionPoolService
 
-    public init(redisConnectionPoolService: HBRedisConnectionPoolService) {
+    public init(redisConnectionPoolService: RedisConnectionPoolService) {
         self.redisConnectionPool = redisConnectionPoolService
     }
 
-    /// create new key with value. If key already exist throw `HBPersistError.duplicate` error
+    /// create new key with value. If key already exist throw `PersistError.duplicate` error
     public func create(key: String, value: some Codable, expires: Duration?) async throws {
         let expiration: RedisSetCommandExpiration? = expires.map { .seconds(Int($0.components.seconds)) }
         let result = try await self.redisConnectionPool.set(.init(key), toJSON: value, onCondition: .keyDoesNotExist, expiration: expiration).get()
@@ -31,7 +31,7 @@ public struct HBRedisPersistDriver: HBPersistDriver {
         case .ok:
             return
         case .conditionNotMet:
-            throw HBPersistError.duplicate
+            throw PersistError.duplicate
         }
     }
 
