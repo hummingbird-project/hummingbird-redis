@@ -7,12 +7,25 @@ This is the Hummingbird interface to [RediStack library](https://gitlab.com/mord
 ## Usage
 
 ```swift
-let app = Application()
-try app.addRedis(configuration: .init(hostname: "localhost", port: 6379))
-app.router.get("redis") { request in
-    request.redis.send(command: "INFO").map {
-        $0.description
-    }
+import Hummingbird
+import HummingbirdRedis
+
+let redis = try RedisConnectionPoolService(
+    .init(hostname: redisHostname, port: 6379),
+    logger: Logger(label: "Redis")
+)
+
+// create router and add a single GET /redis route
+let router = Router()
+router.get("redis") { request, _ -> String in
+    let info = try await redis.send(command: "INFO").get()
+    return String(describing: info)
 }
-app.start()
+// create application using router
+let app = Application(
+    router: router,
+    configuration: .init(address: .hostname("127.0.0.1", port: 8080))
+)
+// run hummingbird application
+try await app.runService()
 ```
