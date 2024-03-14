@@ -22,10 +22,11 @@ router.get("redis") { request, _ -> String in
     return String(describing: info)
 }
 // create application using router
-let app = Application(
+var app = Application(
     router: router,
     configuration: .init(address: .hostname("127.0.0.1", port: 8080))
 )
+app.addServices(redis)
 // run hummingbird application
 try await app.runService()
 ```
