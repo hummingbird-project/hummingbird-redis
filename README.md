@@ -30,3 +30,7 @@ app.addServices(redis)
 // run hummingbird application
 try await app.runService()
 ```
+
+## Documentation
+
+Reference documentation for HummingbirdRedis can be found [here](https://docs.hummingbird.codes/2.0/documentation/hummingbirdredis)
