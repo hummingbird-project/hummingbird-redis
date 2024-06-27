@@ -236,7 +236,7 @@ extension JobQueueDriver where Self == RedisQueue {
 
 // Extend ByteBuffer so that is conforms to `RESPValueConvertible`. Really not sure why
 // this isnt available already
-#if compiler(>=6.0)
+#if hasFeature(RetroactiveAttribute)
 extension ByteBuffer: @retroactive RESPValueConvertible {}
 #else
 extension ByteBuffer: RESPValueConvertible {}
