@@ -20,7 +20,7 @@ import RediStack
 import XCTest
 
 final class PersistTests: XCTestCase {
-    static let redisHostname = Environment.shared.get("REDIS_HOSTNAME") ?? "localhost"
+    static let redisHostname = Environment().get("REDIS_HOSTNAME") ?? "localhost"
 
     func createApplication(_ updateRouter: (Router<BasicRequestContext>, PersistDriver) -> Void = { _, _ in }) throws -> some ApplicationProtocol {
         let router = Router()
