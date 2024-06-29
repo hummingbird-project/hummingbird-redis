@@ -23,7 +23,7 @@ let package = Package(
         .target(name: "HummingbirdJobsRedis", dependencies: [
             .byName(name: "HummingbirdRedis"),
             .product(name: "Hummingbird", package: "hummingbird"),
-            .product(name: "HummingbirdJobs", package: "hummingbird"),
+            .product(name: "HummingbirdJobs", package: "hummingbird-jobs"),
             .product(name: "RediStack", package: "RediStack"),
         ]),
         .testTarget(name: "HummingbirdRedisTests", dependencies: [
@@ -34,7 +34,7 @@ let package = Package(
         .testTarget(name: "HummingbirdJobsRedisTests", dependencies: [
             .byName(name: "HummingbirdJobsRedis"),
             .product(name: "Hummingbird", package: "hummingbird"),
-            .product(name: "HummingbirdJobs", package: "hummingbird"),
+            .product(name: "HummingbirdJobs", package: "hummingbird-jobs"),
             .product(name: "HummingbirdTesting", package: "hummingbird"),
         ]),
     ]
