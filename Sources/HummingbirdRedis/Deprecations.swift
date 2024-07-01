@@ -12,15 +12,15 @@
 //
 //===----------------------------------------------------------------------===//
 
-// Below is a list of deprecated symbols with the "HB" prefix. These are available
+// Below is a list of unavailable symbols with the "HB" prefix. These are available
 // temporarily to ease transition from the old symbols that included the "HB"
 // prefix to the new ones.
 //
 // This file will be removed before we do a 2.0 release
 
-@_documentation(visibility: internal) @available(*, deprecated, renamed: "RedisConfiguration")
+@_documentation(visibility: internal) @available(*, unavailable, renamed: "RedisConfiguration")
 public typealias HBRedisConfiguration = RedisConfiguration
-@_documentation(visibility: internal) @available(*, deprecated, renamed: "RedisConnectionPoolService")
+@_documentation(visibility: internal) @available(*, unavailable, renamed: "RedisConnectionPoolService")
 public typealias HBRedisConnectionPoolService = RedisConnectionPoolService
-@_documentation(visibility: internal) @available(*, deprecated, renamed: "RedisPersistDriver")
+@_documentation(visibility: internal) @available(*, unavailable, renamed: "RedisPersistDriver")
 public typealias HBRedisPersistDriver = RedisPersistDriver
