@@ -139,6 +139,26 @@ extension RedisConnectionPoolService: RedisClient {
     }
 
     @inlinable
+    public func subscribe(
+        to channels: [RedisChannelName],
+        messageReceiver receiver: @escaping RedisSubscriptionMessageReceiver,
+        onSubscribe subscribeHandler: RedisSubscriptionChangeHandler?,
+        onUnsubscribe unsubscribeHandler: RedisSubscriptionChangeHandler?
+    ) -> EventLoopFuture<Void> {
+        self.pool.subscribe(to: channels, messageReceiver: receiver, onSubscribe: subscribeHandler, onUnsubscribe: unsubscribeHandler)
+    }
+
+    @inlinable
+    public func psubscribe(
+        to patterns: [String],
+        messageReceiver receiver: @escaping RedisSubscriptionMessageReceiver,
+        onSubscribe subscribeHandler: RedisSubscriptionChangeHandler?,
+        onUnsubscribe unsubscribeHandler: RedisSubscriptionChangeHandler?
+    ) -> EventLoopFuture<Void> {
+        self.pool.psubscribe(to: patterns, messageReceiver: receiver, onSubscribe: subscribeHandler, onUnsubscribe: unsubscribeHandler)
+    }
+
+    @inlinable
     public func unsubscribe(from channels: [RediStack.RedisChannelName]) -> NIOCore.EventLoopFuture<Void> {
         self.pool.unsubscribe(from: channels)
     }

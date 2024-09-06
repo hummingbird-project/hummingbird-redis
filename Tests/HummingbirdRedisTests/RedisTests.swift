@@ -23,7 +23,7 @@ final class HummingbirdRedisTests: XCTestCase {
     static let env = Environment()
     static let redisHostname = env.get("REDIS_HOSTNAME") ?? "localhost"
 
-    func testApplication() async throws {
+    func testConnectionPoolService() async throws {
         let redis = try RedisConnectionPoolService(
             .init(hostname: Self.redisHostname, port: 6379),
             logger: Logger(label: "Redis")
@@ -33,6 +33,29 @@ final class HummingbirdRedisTests: XCTestCase {
         XCTAssertEqual(info.string?.contains("redis_version"), true)
 
         try await redis.close()
+    }
+
+    func testSubscribe() async throws {
+        let expectation = XCTestExpectation(description: "Waiting on subscription")
+        expectation.expectedFulfillmentCount = 1
+        let redis = try RedisConnectionPoolService(
+            .init(hostname: Self.redisHostname, port: 6379),
+            logger: Logger(label: "Redis")
+        )
+        let redis2 = try RedisConnectionPoolService(
+            .init(hostname: Self.redisHostname, port: 6379),
+            logger: Logger(label: "Redis")
+        )
+
+        _ = try await redis.subscribe(to: ["channel"]) { _, value in
+            XCTAssertEqual(value, .init(from: "hello"))
+            expectation.fulfill()
+        }.get()
+        _ = try await redis2.publish("hello", to: "channel").get()
+        await fulfillment(of: [expectation], timeout: 5)
+        _ = try await redis.unsubscribe(from: ["channel"]).get()
+        try await redis.close()
+        try await redis2.close()
     }
 
     func testRouteHandler() async throws {
