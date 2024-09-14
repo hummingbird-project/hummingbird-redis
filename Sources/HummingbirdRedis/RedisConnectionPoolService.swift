@@ -54,10 +54,6 @@ public struct RedisConnectionPoolService: Service, @unchecked Sendable {
     /// Closes all connections in the pool and deactivates the pool from creating new connections.
     ///
     /// This method is safe to call multiple times.
-    /// - Parameters:
-    ///     - promise: A notification promise to resolve once the close process has completed.
-    ///     - logger: An optional logger to use for any log statements generated while closing the pool.
-    ///         If one is not provided, the pool will use its default logger.
     @inlinable
     public func close() async throws {
         let promise = self.eventLoop.makePromise(of: Void.self)
