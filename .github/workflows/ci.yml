@@ -13,13 +13,16 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-ci
   cancel-in-progress: true
 
+env:
+  REDIS_HOSTNAME: redis
 jobs:
   linux:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
       matrix:
-        image: ["swift:5.9", "swift:5.10", "swiftlang/swift:nightly-6.0-jammy"]
+        image: ["swift:5.9", "swift:5.10", "swift:6.0"]
+        
     services:
       redis:
         image: redis
@@ -29,9 +32,6 @@ jobs:
 
     container:
       image: ${{ matrix.image }}
-      env:
-        REDIS_HOSTNAME: "redis"
-
     steps:
     - name: Checkout
       uses: actions/checkout@v4

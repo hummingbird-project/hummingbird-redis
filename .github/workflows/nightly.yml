@@ -3,6 +3,8 @@ name: Swift nightly build
 on:
   workflow_dispatch:
 
+env:
+  REDIS_HOSTNAME: redis
 jobs:
   linux:
     runs-on: ubuntu-latest
@@ -10,6 +12,7 @@ jobs:
     strategy:
       matrix:
         image: ['nightly-focal', 'nightly-jammy', 'nightly-amazonlinux2']
+        
     services:
       redis:
         image: redis
@@ -19,9 +22,6 @@ jobs:
 
     container:
       image: swiftlang/swift:${{ matrix.image }}
-      env:
-        REDIS_HOSTNAME: "redis"
-
     steps:
     - name: Checkout
       uses: actions/checkout@v4
