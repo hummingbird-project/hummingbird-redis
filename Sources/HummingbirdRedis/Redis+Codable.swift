@@ -18,10 +18,9 @@ import RediStack
 
 extension RedisClient {
     /// Decodes the value associated with this keyfrom JSON.
-    public func get<D: Decodable>(_ key: RedisKey, asJSON type: D.Type) -> EventLoopFuture<D?> {
-        return self.get(key, as: Data.self).flatMapThrowing { data in
-            try data.map { try JSONDecoder().decode(D.self, from: $0) }
-        }
+    public func get<D: Decodable>(_ key: RedisKey, asJSON type: D.Type) async throws -> D? {
+        guard let data = try await self.get(key, as: Data.self).get() else { return nil }
+        return try JSONDecoder().decode(D.self, from: data)
     }
 
     /// Sets the value stored in the key provided, overwriting the previous value.
@@ -36,12 +35,8 @@ extension RedisClient {
     ///     - value: The value to set the key to.
     /// - Returns: An `EventLoopFuture` that resolves if the operation was successful.
     @inlinable
-    public func set(_ key: RedisKey, toJSON value: some Encodable) -> EventLoopFuture<Void> {
-        do {
-            return try self.set(key, to: JSONEncoder().encode(value))
-        } catch {
-            return self.eventLoop.makeFailedFuture(error)
-        }
+    public func set(_ key: RedisKey, toJSON value: some Encodable) async throws {
+        try await self.set(key, to: JSONEncoder().encode(value)).get()
     }
 
     /// Sets the key to the provided value with options to control how it is set.
@@ -60,85 +55,13 @@ extension RedisClient {
     ///     `.ok` if the operation was successful and `.conditionNotMet` if the specified `condition` was not met.
     ///
     ///     If the condition `.none` was used, then the result value will always be `.ok`.
+    @_disfavoredOverload
     public func set(
         _ key: RedisKey,
         toJSON value: some Encodable,
-        onCondition condition: RedisSetCommandCondition,
+        onCondition condition: RedisSetCommandCondition = .none,
         expiration: RedisSetCommandExpiration? = nil
-    ) -> EventLoopFuture<RedisSetCommandResult> {
-        do {
-            return try self.set(key, to: JSONEncoder().encode(value), onCondition: condition, expiration: expiration)
-        } catch {
-            return self.eventLoop.makeFailedFuture(error)
-        }
-    }
-
-    /// Sets the key to the provided value if the key does not exist.
-    ///
-    /// [https://redis.io/commands/setnx](https://redis.io/commands/setnx)
-    /// - Important: Regardless of the type of data stored at the key, it will be overwritten to a "string" data type.
-    ///
-    /// ie. If the key is a reference to a Sorted Set, its value will be overwritten to be a "string" data type.
-    /// - Parameters:
-    ///     - key: The key to use to uniquely identify this value.
-    ///     - value: The value to set the key to.
-    /// - Returns: `true` if the operation successfully completed.
-    @inlinable
-    public func setnx(_ key: RedisKey, toJSON value: some Encodable) -> EventLoopFuture<Bool> {
-        do {
-            return try self.setnx(key, to: JSONEncoder().encode(value))
-        } catch {
-            return self.eventLoop.makeFailedFuture(error)
-        }
-    }
-
-    /// Sets a key to the provided value and an expiration timeout in seconds.
-    ///
-    /// See [https://redis.io/commands/setex](https://redis.io/commands/setex)
-    /// - Important: Regardless of the type of data stored at the key, it will be overwritten to a "string" data type.
-    ///
-    /// ie. If the key is a reference to a Sorted Set, its value will be overwritten to be a "string" data type.
-    /// - Important: The actual expiration used will be the specified value or `1`, whichever is larger.
-    /// - Parameters:
-    ///     - key: The key to use to uniquely identify this value.
-    ///     - value: The value to set the key to.
-    ///     - expiration: The number of seconds after which to expire the key.
-    /// - Returns: A `NIO.EventLoopFuture` that resolves if the operation was successful.
-    @inlinable
-    public func setex(
-        _ key: RedisKey,
-        toJSON value: some Encodable,
-        expirationInSeconds expiration: Int
-    ) -> EventLoopFuture<Void> {
-        do {
-            return try self.setex(key, to: JSONEncoder().encode(value), expirationInSeconds: expiration)
-        } catch {
-            return self.eventLoop.makeFailedFuture(error)
-        }
-    }
-
-    /// Sets a key to the provided value and an expiration timeout in milliseconds.
-    ///
-    /// See [https://redis.io/commands/psetex](https://redis.io/commands/psetex)
-    /// - Important: Regardless of the type of data stored at the key, it will be overwritten to a "string" data type.
-    ///
-    /// ie. If the key is a reference to a Sorted Set, its value will be overwritten to be a "string" data type.
-    /// - Important: The actual expiration used will be the specified value or `1`, whichever is larger.
-    /// - Parameters:
-    ///     - key: The key to use to uniquely identify this value.
-    ///     - value: The value to set the key to.
-    ///     - expiration: The number of milliseconds after which to expire the key.
-    /// - Returns: A `NIO.EventLoopFuture` that resolves if the operation was successful.
-    @inlinable
-    public func psetex(
-        _ key: RedisKey,
-        toJSON value: some Encodable,
-        expirationInMilliseconds expiration: Int
-    ) -> EventLoopFuture<Void> {
-        do {
-            return try self.psetex(key, to: JSONEncoder().encode(value), expirationInMilliseconds: expiration)
-        } catch {
-            return self.eventLoop.makeFailedFuture(error)
-        }
+    ) async throws -> RedisSetCommandResult {
+        try await self.set(key, to: JSONEncoder().encode(value), onCondition: condition, expiration: expiration).get()
     }
 }

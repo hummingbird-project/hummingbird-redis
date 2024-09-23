@@ -26,7 +26,7 @@ public struct RedisPersistDriver: PersistDriver {
     /// create new key with value. If key already exist throw `PersistError.duplicate` error
     public func create(key: String, value: some Codable, expires: Duration?) async throws {
         let expiration: RedisSetCommandExpiration? = expires.map { .seconds(Int($0.components.seconds)) }
-        let result = try await self.redisConnectionPool.set(.init(key), toJSON: value, onCondition: .keyDoesNotExist, expiration: expiration).get()
+        let result = try await self.redisConnectionPool.set(.init(key), toJSON: value, onCondition: .keyDoesNotExist, expiration: expiration)
         switch result {
         case .ok:
             return
@@ -39,15 +39,25 @@ public struct RedisPersistDriver: PersistDriver {
     public func set(key: String, value: some Codable, expires: Duration?) async throws {
         if let expires {
             let expiration = Int(expires.components.seconds)
-            return try await self.redisConnectionPool.setex(.init(key), toJSON: value, expirationInSeconds: expiration).get()
+            _ = try await self.redisConnectionPool.set(
+                .init(key),
+                toJSON: value,
+                onCondition: .none,
+                expiration: .seconds(expiration)
+            )
         } else {
-            return try await self.redisConnectionPool.set(.init(key), toJSON: value).get()
+            _ = try await self.redisConnectionPool.set(
+                .init(key),
+                toJSON: value,
+                onCondition: .none,
+                expiration: .keepExisting
+            )
         }
     }
 
     /// get value for key
     public func get<Object: Codable>(key: String, as object: Object.Type) async throws -> Object? {
-        try await self.redisConnectionPool.get(.init(key), asJSON: object).get()
+        try await self.redisConnectionPool.get(.init(key), asJSON: object)
     }
 
     /// remove key

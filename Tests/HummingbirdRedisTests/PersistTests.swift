@@ -195,12 +195,12 @@ final class PersistTests: XCTestCase {
         try await app.test(.router) { client in
 
             let tag = UUID().uuidString
-            try await client.execute(uri: "/persist/\(tag)/0", method: .put, body: ByteBufferAllocator().buffer(string: "ThisIsTest1")) { _ in }
+            try await client.execute(uri: "/persist/\(tag)/0", method: .put, body: ByteBuffer(string: "ThisIsTest1")) { _ in }
             try await Task.sleep(nanoseconds: 1_000_000_000)
             try await client.execute(uri: "/persist/\(tag)", method: .get) { response in
                 XCTAssertEqual(response.status, .noContent)
             }
-            try await client.execute(uri: "/persist/\(tag)/10", method: .put, body: ByteBufferAllocator().buffer(string: "ThisIsTest1")) { response in
+            try await client.execute(uri: "/persist/\(tag)/10", method: .put, body: ByteBuffer(string: "ThisIsTest1")) { response in
                 XCTAssertEqual(response.status, .ok)
             }
             try await client.execute(uri: "/persist/\(tag)", method: .get) { response in
