@@ -33,7 +33,6 @@ extension RedisClient {
     /// - Parameters:
     ///     - key: The key to use to uniquely identify this value.
     ///     - value: The value to set the key to.
-    /// - Returns: An `EventLoopFuture` that resolves if the operation was successful.
     @inlinable
     public func set(_ key: RedisKey, toJSON value: some Encodable) async throws {
         try await self.set(key, to: JSONEncoder().encode(value)).get()
