@@ -22,7 +22,8 @@ jobs:
     strategy:
       matrix:
         image: ["swift:5.9", "swift:5.10", "swift:6.0"]
-        
+    container:
+      image: ${{ matrix.image }}
     services:
       redis:
         image: redis
@@ -30,8 +31,6 @@ jobs:
           - 6379:6379
         options: --entrypoint redis-server
 
-    container:
-      image: ${{ matrix.image }}
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -48,4 +47,4 @@ jobs:
     - name: Upload to codecov.io
       uses: codecov/codecov-action@v5
       with:
-        file: info.lcov
+        files: info.lcov
