@@ -57,7 +57,11 @@ public struct RedisPersistDriver: PersistDriver {
 
     /// get value for key
     public func get<Object: Codable>(key: String, as object: Object.Type) async throws -> Object? {
-        try await self.redisConnectionPool.get(.init(key), asJSON: object)
+        do {
+            return try await self.redisConnectionPool.get(.init(key), asJSON: object)
+        } catch is DecodingError {
+            throw PersistError.invalidConversion
+        }
     }
 
     /// remove key
