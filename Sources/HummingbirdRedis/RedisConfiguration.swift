@@ -12,13 +12,15 @@
 //
 //===----------------------------------------------------------------------===//
 
-// Based of the Vapor redis configuration that can be found
-// here https://github.com/vapor/redis/blob/master/Sources/Redis/RedisConfiguration.swift
-import struct Foundation.URL
 import Hummingbird
 import Logging
 import NIOCore
 import RediStack
+
+import struct Foundation.URL
+
+// Based of the Vapor redis configuration that can be found
+// here https://github.com/vapor/redis/blob/master/Sources/Redis/RedisConfiguration.swift
 
 public struct RedisConfiguration {
     public typealias ValidationError = RedisConnection.Configuration.ValidationError

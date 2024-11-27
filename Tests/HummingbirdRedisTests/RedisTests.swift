@@ -13,11 +13,12 @@
 //===----------------------------------------------------------------------===//
 
 import Hummingbird
-@testable import HummingbirdRedis
 import HummingbirdTesting
 import Logging
 import NIOPosix
 import XCTest
+
+@testable import HummingbirdRedis
 
 final class HummingbirdRedisTests: XCTestCase {
     static let env = Environment()
