@@ -16,7 +16,7 @@ import Foundation
 import Hummingbird
 import Logging
 import NIOCore
-import RediStack
+@preconcurrency import RediStack
 import ServiceLifecycle
 
 /// Wrapper for RedisConnectionPool that conforms to ServiceLifecycle Service

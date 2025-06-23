@@ -15,7 +15,7 @@
 import Hummingbird
 import Logging
 import NIOCore
-import RediStack
+@preconcurrency import RediStack
 
 import struct Foundation.URL
 

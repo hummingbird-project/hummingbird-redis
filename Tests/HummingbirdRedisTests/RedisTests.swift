@@ -16,6 +16,7 @@ import Hummingbird
 import HummingbirdTesting
 import Logging
 import NIOPosix
+@preconcurrency import RediStack
 import XCTest
 
 @testable import HummingbirdRedis
