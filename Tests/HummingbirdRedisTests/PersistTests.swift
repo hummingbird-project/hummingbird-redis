@@ -16,7 +16,7 @@ import Hummingbird
 import HummingbirdRedis
 import HummingbirdTesting
 import Logging
-import RediStack
+@preconcurrency import RediStack
 import XCTest
 
 final class PersistTests: XCTestCase {

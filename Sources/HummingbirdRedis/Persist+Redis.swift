@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Hummingbird
-import RediStack
+@preconcurrency import RediStack
 
 /// Redis driver for persist system for storing persistent cross request key/value pairs
 public struct RedisPersistDriver: PersistDriver {

@@ -14,7 +14,7 @@
 
 import Foundation
 import NIO
-import RediStack
+@preconcurrency import RediStack
 
 extension RedisClient {
     /// Decodes the value associated with this keyfrom JSON.
