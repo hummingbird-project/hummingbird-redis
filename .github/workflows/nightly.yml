@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 env:
-  REDIS_HOSTNAME: redis
+  VALKEY_HOSTNAME: valkey
 jobs:
   linux:
     runs-on: ubuntu-latest
@@ -15,11 +15,11 @@ jobs:
     container:
       image: swiftlang/swift:${{ matrix.image }}
     services:
-      redis:
-        image: redis
+      valkey:
+        image: valkey/valkey
         ports:
           - 6379:6379
-        options: --entrypoint redis-server
+        options: --entrypoint valkey-server
 
     steps:
     - name: Checkout

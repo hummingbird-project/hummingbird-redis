@@ -8,47 +8,51 @@
 <a href="https://swift.org">
   <img src="https://img.shields.io/badge/swift-5.9-brightgreen.svg"/>
 </a>
-<a href="https://github.com/hummingbird-project/hummingbird-redis/actions?query=workflow%3ACI">
-  <img src="https://github.com/hummingbird-project/hummingbird-redis/actions/workflows/ci.yml/badge.svg?branch=main"/>
+<a href="https://github.com/hummingbird-project/hummingbird-valkey/actions?query=workflow%3ACI">
+  <img src="https://github.com/hummingbird-project/hummingbird-valkey/actions/workflows/ci.yml/badge.svg?branch=main"/>
 </a>
 <a href="https://discord.gg/7ME3nZ7mP2">
   <img src="https://img.shields.io/badge/chat-discord-brightgreen.svg"/>
 </a>
 </p>
 
-# Hummingbird Redis Interface
+# Hummingbird Valkey/Redis Interface
 
-Redis is an open source, in-memory data structure store, used as a database, cache, and message broker.
+Valkey is an open source, in-memory data structure store, used as a database, cache, and message broker.
 
-This is the Hummingbird interface to [RediStack library](https://gitlab.com/mordil/RediStack.git) a Swift driver for Redis.
+This is the Hummingbird interface to the [valkey-swift library](https://github.com/valkey-io/valkey-swift.git) a Swift driver for Valkey/Redis. Currently HummingbirdValkey consists of driver for the Hummingbird persist framework.
 
 ## Usage
 
 ```swift
 import Hummingbird
-import HummingbirdRedis
+import HummingbirdValkey
 
-let redis = try RedisConnectionPoolService(
-    .init(hostname: redisHostname, port: 6379),
-    logger: Logger(label: "Redis")
-)
+let valkey = ValkeyClient(.hostname(valkeyHostname, port: 6379), logger: Logger(label: "Valkey"))
+let persist = ValkeyPersistDriver(client: valkeyClient)
 
-// create router and add a single GET /redis route
+// create router and add a GET /valkey/{key} and PUT /valkey/{key} routes
 let router = Router()
-router.get("redis") { request, _ -> String in
-    let info = try await redis.send(command: "INFO").get()
-    return String(describing: info)
+router.get("valkey/{key}") { request, context -> String? in
+    let key = try context.parameters.require("key")
+    return try await persist.get(key: .init(key), as: String.self)
+}
+router.put("valkey/{key}") { request, context in
+    let key = try context.parameters.require("key")
+    let value = try request.uri.queryParameters.require("value")
+    try await persist.set(key: key, value: value)
+    return HTTPResponse.Status.ok
 }
 // create application using router
 var app = Application(
     router: router,
     configuration: .init(address: .hostname("127.0.0.1", port: 8080))
 )
-app.addServices(redis)
+app.addServices(valkey)
 // run hummingbird application
 try await app.runService()
 ```
 
 ## Documentation
 
-Reference documentation for HummingbirdRedis can be found [here](https://docs.hummingbird.codes/2.0/documentation/hummingbirdredis)
+Reference documentation for HummingbirdValkey can be found [here](https://docs.hummingbird.codes/2.0/documentation/hummingbirdvalkey)

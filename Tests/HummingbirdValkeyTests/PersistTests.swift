@@ -13,22 +13,33 @@
 //===----------------------------------------------------------------------===//
 
 import Hummingbird
-import HummingbirdRedis
 import HummingbirdTesting
+import HummingbirdValkey
 import Logging
-@preconcurrency import RediStack
+import Valkey
 import XCTest
 
 final class PersistTests: XCTestCase {
-    static let redisHostname = Environment().get("REDIS_HOSTNAME") ?? "localhost"
+    static let valkeyHostname = Environment().get("VALKEY_HOSTNAME") ?? "localhost"
 
     func createApplication(_ updateRouter: (Router<BasicRequestContext>, PersistDriver) -> Void = { _, _ in }) throws -> some ApplicationProtocol {
         let router = Router()
-        let redisConnectionPool = try RedisConnectionPoolService(
-            .init(hostname: Self.redisHostname, port: 6379),
-            logger: Logger(label: "Redis")
-        )
-        let persist = RedisPersistDriver(redisConnectionPoolService: redisConnectionPool)
+        var logger = Logger(label: "Valkey")
+        logger.logLevel = .debug
+        let valkeyClient = ValkeyClient(.hostname(Self.valkeyHostname, port: 6379), logger: logger)
+        let persist = ValkeyPersistDriver(client: valkeyClient)
+
+        router.get("valkey/{key}") { request, context -> String? in
+            let key = try context.parameters.require("key")
+            return try await persist.get(key: .init(key), as: String.self)
+        }
+
+        router.put("valkey/{key}") { request, context in
+            let key = try context.parameters.require("key")
+            let value = try request.uri.queryParameters.require("value")
+            try await persist.set(key: key, value: value)
+            return HTTPResponse.Status.ok
+        }
 
         router.put("/persist/:tag") { request, context -> HTTPResponse.Status in
             let buffer = try await request.body.collect(upTo: .max)
@@ -54,7 +65,7 @@ final class PersistTests: XCTestCase {
         }
         updateRouter(router, persist)
         var app = Application(responder: router.buildResponder())
-        app.addServices(redisConnectionPool, persist)
+        app.addServices(valkeyClient, persist)
 
         return app
     }
