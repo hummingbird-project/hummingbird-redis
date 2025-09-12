@@ -16,6 +16,8 @@
 </a>
 </p>
 
+> This package can be replaced with [hummingbird-valkey](https://github.com/hummingbird-project/hummingbird-valkey). Currently hummingbird-valkey is in pre-release but when v1.0 is released this package will be deprecated.
+
 # Hummingbird Redis Interface
 
 Redis is an open source, in-memory data structure store, used as a database, cache, and message broker.
