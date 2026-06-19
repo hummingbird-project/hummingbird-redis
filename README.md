@@ -16,7 +16,7 @@
 </a>
 </p>
 
-> This package can be replaced with [hummingbird-valkey](https://github.com/hummingbird-project/hummingbird-valkey). Currently hummingbird-valkey is in pre-release but when v1.0 is released this package will be deprecated.
+> This package has been replaced with [hummingbird-valkey](https://github.com/hummingbird-project/hummingbird-valkey) and is now deprecated.
 
 # Hummingbird Redis Interface
 
